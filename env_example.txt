@@ -1,0 +1,14 @@
+# Meeting Transcriber Environment Variables
+# Copy this file to .env and fill in your actual values
+
+# OpenAI API Key (required for AI summarization)
+# Get your API key from: https://platform.openai.com/api-keys
+OPENAI_API_KEY=your_openai_api_key_here
+
+# Authentication (optional - defaults to admin/password123)
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=password123
+
+# Flask Configuration
+FLASK_ENV=production
+FLASK_DEBUG=False 

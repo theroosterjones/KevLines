@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meeting Transcriber</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            padding: 40px;
+            max-width: 900px;
+            width: 100%;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            position: relative;
+        }
+
+        .header h1 {
+            color: #333;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 1.1em;
+        }
+
+        .logout-btn {
+            position: absolute;
+            top: 0;
+            right: 0;
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .logout-btn:hover {
+            background: #c82333;
+            transform: translateY(-1px);
+        }
+
+        .tabs {
+            display: flex;
+            margin-bottom: 30px;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 15px;
+            background: #f8f9fa;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .tab-btn.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .tab-btn:hover:not(.active) {
+            background: #e9ecef;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .upload-area {
+            border: 3px dashed #ddd;
+            border-radius: 15px;
+            padding: 40px;
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            margin-bottom: 30px;
+        }
+
+        .upload-area:hover {
+            border-color: #667eea;
+            background-color: #f8f9ff;
+        }
+
+        .upload-area.dragover {
+            border-color: #667eea;
+            background-color: #f0f4ff;
+        }
+
+        .upload-icon {
+            font-size: 3em;
+            color: #667eea;
+            margin-bottom: 20px;
+        }
+
+        .upload-text {
+            font-size: 1.2em;
+            color: #666;
+            margin-bottom: 10px;
+        }
+
+        .upload-hint {
+            font-size: 0.9em;
+            color: #999;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .recording-controls {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .record-btn {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 20px 40px;
+            border-radius: 50px;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin: 10px;
+        }
+
+        .record-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(220, 53, 69, 0.3);
+        }
+
+        .record-btn.recording {
+            background: #28a745;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 25px;
+            font-size: 1.1em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin: 10px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .progress-container {
+            display: none;
+            margin: 20px 0;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 10px;
+            background-color: #f0f0f0;
+            border-radius: 5px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .status {
+            text-align: center;
+            margin: 20px 0;
+            font-weight: 500;
+        }
+
+        .results {
+            display: none;
+            margin-top: 30px;
+        }
+
+        .result-section {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 15px 0;
+        }
+
+        .result-section h3 {
+            color: #333;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+        }
+
+        .result-section h3 i {
+            margin-right: 10px;
+            color: #667eea;
+        }
+
+        .result-content {
+            background: white;
+            border-radius: 8px;
+            padding: 15px;
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #e9ecef;
+        }
+
+        .download-btn {
+            background: #28a745;
+            margin-top: 10px;
+        }
+
+        .error {
+            color: #dc3545;
+            text-align: center;
+            margin: 10px 0;
+            padding: 10px;
+            background: #f8d7da;
+            border-radius: 5px;
+        }
+
+        .success {
+            color: #155724;
+            text-align: center;
+            margin: 10px 0;
+            padding: 10px;
+            background: #d4edda;
+            border-radius: 5px;
+        }
+
+        .recording-status {
+            text-align: center;
+            margin: 20px 0;
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .recording-time {
+            font-size: 24px;
+            color: #dc3545;
+            font-weight: bold;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+            }
+            
+            .header h1 {
+                font-size: 2em;
+            }
+            
+            .upload-area {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1><i class="fas fa-microphone"></i> Meeting Transcriber</h1>
+            <p>Upload your Teams or Zoom meeting recordings for automated transcription and summarization</p>
+            <a href="/logout" class="logout-btn">
+                <i class="fas fa-sign-out-alt"></i> Logout
+            </a>
+        </div>
+
+        <div class="tabs">
+            <button class="tab-btn active" onclick="showTab('upload')">
+                <i class="fas fa-upload"></i> Upload Files
+            </button>
+            <button class="tab-btn" onclick="showTab('record')">
+                <i class="fas fa-microphone"></i> Record Live
+            </button>
+        </div>
+
+        <!-- Upload Tab -->
+        <div id="upload-tab" class="tab-content active">
+            <div class="upload-area" id="uploadArea">
+                <div class="upload-icon">
+                    <i class="fas fa-cloud-upload-alt"></i>
+                </div>
+                <div class="upload-text">Drag and drop your audio file here</div>
+                <div class="upload-hint">or click to browse</div>
+                <input type="file" id="fileInput" class="file-input" accept=".wav,.mp3,.m4a,.flac,.aac,.ogg">
+            </div>
+        </div>
+
+        <!-- Record Tab -->
+        <div id="record-tab" class="tab-content">
+            <div class="recording-controls">
+                <button class="record-btn" id="recordBtn">
+                    <i class="fas fa-microphone"></i> Start Recording
+                </button>
+                <div class="recording-status" id="recordingStatus" style="display: none;">
+                    Recording... <span class="recording-time" id="recordingTime">00:00</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="progress-container" id="progressContainer">
+            <div class="status" id="status">Processing...</div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+        </div>
+
+        <div class="results" id="results">
+            <div class="result-section">
+                <h3><i class="fas fa-file-alt"></i> Transcription</h3>
+                <div class="result-content" id="transcriptionContent"></div>
+            </div>
+            
+            <div class="result-section">
+                <h3><i class="fas fa-list"></i> Summary</h3>
+                <div class="result-content" id="summaryContent"></div>
+            </div>
+            
+            <div style="text-align: center;">
+                <button class="btn download-btn" id="downloadBtn">
+                    <i class="fas fa-download"></i> Download Transcript
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentFilename = '';
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let recordingInterval = null;
+        let recordingStartTime = null;
+
+        // Tab functionality
+        function showTab(tabName) {
+            // Hide all tab contents
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Remove active class from all tab buttons
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            // Show selected tab content
+            document.getElementById(tabName + '-tab').classList.add('active');
+            
+            // Add active class to clicked button
+            event.target.classList.add('active');
+        }
+
+        // File upload functionality
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressFill = document.getElementById('progressFill');
+        const status = document.getElementById('status');
+        const results = document.getElementById('results');
+        const transcriptionContent = document.getElementById('transcriptionContent');
+        const summaryContent = document.getElementById('summaryContent');
+        const downloadBtn = document.getElementById('downloadBtn');
+
+        // Drag and drop functionality
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        });
+
+        uploadArea.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFile(e.target.files[0]);
+            }
+        });
+
+        function handleFile(file) {
+            if (!file.type.startsWith('audio/')) {
+                showError('Please select an audio file');
+                return;
+            }
+
+            uploadFile(file);
+        }
+
+        function uploadFile(file) {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            showProgress('Uploading file...');
+            progressFill.style.width = '25%';
+
+            fetch('/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    currentFilename = data.filename;
+                    showProgress('Transcribing audio...');
+                    progressFill.style.width = '50%';
+                    transcribeFile(data.filename);
+                } else {
+                    showError(data.error);
+                }
+            })
+            .catch(error => {
+                showError('Upload failed: ' + error.message);
+            });
+        }
+
+        function transcribeFile(filename) {
+            fetch('/transcribe', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ filename: filename })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showProgress('Generating summary...');
+                    progressFill.style.width = '75%';
+                    
+                    setTimeout(() => {
+                        progressFill.style.width = '100%';
+                        showProgress('Complete!');
+                        
+                        setTimeout(() => {
+                            hideProgress();
+                            showResults(data.transcription, data.summary, data.output_file);
+                        }, 500);
+                    }, 1000);
+                } else {
+                    showError(data.error);
+                }
+            })
+            .catch(error => {
+                showError('Transcription failed: ' + error.message);
+            });
+        }
+
+        // Recording functionality
+        const recordBtn = document.getElementById('recordBtn');
+        const recordingStatus = document.getElementById('recordingStatus');
+        const recordingTime = document.getElementById('recordingTime');
+
+        recordBtn.addEventListener('click', toggleRecording);
+
+        async function toggleRecording() {
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                stopRecording();
+            } else {
+                startRecording();
+            }
+        }
+
+        async function startRecording() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+                audioChunks = [];
+
+                mediaRecorder.addEventListener('dataavailable', event => {
+                    audioChunks.push(event.data);
+                });
+
+                mediaRecorder.addEventListener('stop', () => {
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                    processRecording(audioBlob);
+                });
+
+                mediaRecorder.start();
+                recordBtn.innerHTML = '<i class="fas fa-stop"></i> Stop Recording';
+                recordBtn.classList.add('recording');
+                recordingStatus.style.display = 'block';
+                
+                // Start timer
+                recordingStartTime = Date.now();
+                recordingInterval = setInterval(updateRecordingTime, 1000);
+                
+            } catch (error) {
+                showError('Microphone access denied: ' + error.message);
+            }
+        }
+
+        function stopRecording() {
+            if (mediaRecorder) {
+                mediaRecorder.stop();
+                mediaRecorder.stream.getTracks().forEach(track => track.stop());
+                
+                recordBtn.innerHTML = '<i class="fas fa-microphone"></i> Start Recording';
+                recordBtn.classList.remove('recording');
+                recordingStatus.style.display = 'none';
+                
+                // Stop timer
+                if (recordingInterval) {
+                    clearInterval(recordingInterval);
+                    recordingInterval = null;
+                }
+            }
+        }
+
+        function updateRecordingTime() {
+            if (recordingStartTime) {
+                const elapsed = Math.floor((Date.now() - recordingStartTime) / 1000);
+                const minutes = Math.floor(elapsed / 60);
+                const seconds = elapsed % 60;
+                recordingTime.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            }
+        }
+
+        function processRecording(audioBlob) {
+            const formData = new FormData();
+            formData.append('audio', audioBlob, 'recording.wav');
+
+            showProgress('Processing recording...');
+            progressFill.style.width = '25%';
+
+            fetch('/record', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showProgress('Generating summary...');
+                    progressFill.style.width = '75%';
+                    
+                    setTimeout(() => {
+                        progressFill.style.width = '100%';
+                        showProgress('Complete!');
+                        
+                        setTimeout(() => {
+                            hideProgress();
+                            showResults(data.transcription, data.summary, data.output_file);
+                        }, 500);
+                    }, 1000);
+                } else {
+                    showError(data.error);
+                }
+            })
+            .catch(error => {
+                showError('Recording processing failed: ' + error.message);
+            });
+        }
+
+        function showProgress(message) {
+            status.textContent = message;
+            progressContainer.style.display = 'block';
+        }
+
+        function hideProgress() {
+            progressContainer.style.display = 'none';
+        }
+
+        function showResults(transcription, summary, outputFile) {
+            transcriptionContent.textContent = transcription;
+            summaryContent.textContent = summary;
+            results.style.display = 'block';
+            
+            downloadBtn.onclick = () => {
+                window.open(`/download/${outputFile}`, '_blank');
+            };
+        }
+
+        function showError(message) {
+            hideProgress();
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error';
+            errorDiv.textContent = message;
+            document.querySelector('.container').insertBefore(errorDiv, document.querySelector('.progress-container'));
+            
+            setTimeout(() => {
+                errorDiv.remove();
+            }, 5000);
+        }
+    </script>
+</body>
+</html> 

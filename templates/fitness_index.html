@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KevLines - Fitness Form Analyzer</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            padding: 40px;
+            max-width: 900px;
+            width: 100%;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .header h1 {
+            color: #333;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 1.1em;
+        }
+
+        .upload-area {
+            border: 3px dashed #ddd;
+            border-radius: 15px;
+            padding: 40px;
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            margin-bottom: 30px;
+        }
+
+        .upload-area:hover {
+            border-color: #667eea;
+            background-color: #f8f9ff;
+        }
+
+        .upload-area.dragover {
+            border-color: #667eea;
+            background-color: #f0f4ff;
+        }
+
+        .upload-icon {
+            font-size: 3em;
+            color: #667eea;
+            margin-bottom: 20px;
+        }
+
+        .upload-text {
+            font-size: 1.2em;
+            color: #666;
+            margin-bottom: 10px;
+        }
+
+        .upload-hint {
+            font-size: 0.9em;
+            color: #999;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .exercise-selector {
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        .exercise-btn {
+            background: #f8f9fa;
+            color: #333;
+            border: 2px solid #ddd;
+            padding: 15px 25px;
+            border-radius: 25px;
+            font-size: 1.1em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin: 5px;
+        }
+
+        .exercise-btn.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-color: #667eea;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 25px;
+            font-size: 1.1em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin: 10px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .results {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 15px;
+            display: none;
+        }
+
+        .result-item {
+            margin: 10px 0;
+            padding: 10px;
+            background: white;
+            border-radius: 10px;
+            border-left: 4px solid #667eea;
+        }
+
+        .progress {
+            width: 100%;
+            height: 20px;
+            background: #e9ecef;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 20px 0;
+            display: none;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .status {
+            text-align: center;
+            margin: 20px 0;
+            font-weight: 600;
+            color: #667eea;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏋️ KevLines</h1>
+            <p>AI-Powered Fitness Form Analyzer</p>
+        </div>
+
+        <div class="exercise-selector">
+            <button class="exercise-btn active" data-exercise="pushup">
+                <i class="fas fa-dumbbell"></i> Push-ups
+            </button>
+            <button class="exercise-btn" data-exercise="squat">
+                <i class="fas fa-running"></i> Squats
+            </button>
+        </div>
+
+        <div class="upload-area" id="uploadArea">
+            <div class="upload-icon">
+                <i class="fas fa-cloud-upload-alt"></i>
+            </div>
+            <div class="upload-text">Upload your workout video</div>
+            <div class="upload-hint">Drag and drop or click to browse (MP4, AVI, MOV, etc.)</div>
+            <input type="file" id="fileInput" class="file-input" accept="video/*">
+        </div>
+
+        <div style="text-align: center;">
+            <button class="btn" id="analyzeBtn" disabled>
+                <i class="fas fa-play"></i> Analyze Form
+            </button>
+        </div>
+
+        <div class="progress" id="progress">
+            <div class="progress-bar" id="progressBar"></div>
+        </div>
+
+        <div class="status" id="status"></div>
+
+        <div class="results" id="results">
+            <h3>Analysis Results</h3>
+            <div id="resultContent"></div>
+            <button class="btn" id="downloadBtn" style="display: none;">
+                <i class="fas fa-download"></i> Download Analyzed Video
+            </button>
+        </div>
+    </div>
+
+    <script>
+        let selectedFile = null;
+        let selectedExercise = 'pushup';
+
+        // Exercise selector
+        document.querySelectorAll('.exercise-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.exercise-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                selectedExercise = btn.dataset.exercise;
+            });
+        });
+
+        // File upload
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const analyzeBtn = document.getElementById('analyzeBtn');
+
+        uploadArea.addEventListener('click', () => fileInput.click());
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFile(e.target.files[0]);
+            }
+        });
+
+        function handleFile(file) {
+            if (file.type.startsWith('video/')) {
+                selectedFile = file;
+                uploadArea.innerHTML = `
+                    <div class="upload-icon">
+                        <i class="fas fa-check-circle" style="color: #28a745;"></i>
+                    </div>
+                    <div class="upload-text">${file.name}</div>
+                    <div class="upload-hint">Ready to analyze</div>
+                `;
+                analyzeBtn.disabled = false;
+            } else {
+                alert('Please select a video file');
+            }
+        }
+
+        // Analyze button
+        analyzeBtn.addEventListener('click', async () => {
+            if (!selectedFile) return;
+
+            const formData = new FormData();
+            formData.append('file', selectedFile);
+
+            // Upload file
+            analyzeBtn.disabled = true;
+            document.getElementById('status').textContent = 'Uploading video...';
+            document.getElementById('progress').style.display = 'block';
+
+            try {
+                const uploadResponse = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const uploadResult = await uploadResponse.json();
+                if (!uploadResult.success) {
+                    throw new Error(uploadResult.error);
+                }
+
+                // Analyze video
+                document.getElementById('status').textContent = 'Analyzing form...';
+                document.getElementById('progressBar').style.width = '50%';
+
+                const analyzeResponse = await fetch('/analyze', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        filename: uploadResult.filename,
+                        exercise_type: selectedExercise
+                    })
+                });
+
+                const analyzeResult = await analyzeResponse.json();
+                if (!analyzeResult.success) {
+                    throw new Error(analyzeResult.error);
+                }
+
+                // Show results
+                document.getElementById('progressBar').style.width = '100%';
+                document.getElementById('status').textContent = 'Analysis complete!';
+                
+                const results = analyzeResult.results;
+                document.getElementById('resultContent').innerHTML = `
+                    <div class="result-item">
+                        <strong>Reps Count:</strong> ${results.rep_count}
+                    </div>
+                    <div class="result-item">
+                        <strong>Form Score:</strong> ${results.form_score}/100
+                    </div>
+                    <div class="result-item">
+                        <strong>Feedback:</strong> ${results.feedback.join(', ') || 'Great form!'}
+                    </div>
+                `;
+
+                document.getElementById('results').style.display = 'block';
+                document.getElementById('downloadBtn').style.display = 'inline-block';
+                document.getElementById('downloadBtn').onclick = () => {
+                    window.location.href = `/download/${analyzeResult.output_file}`;
+                };
+
+            } catch (error) {
+                document.getElementById('status').textContent = `Error: ${error.message}`;
+                analyzeBtn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>
+
