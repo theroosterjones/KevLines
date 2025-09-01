@@ -68,7 +68,7 @@ build_simulator() {
         -project "${PROJECT_NAME}.xcodeproj" \
         -scheme "${SCHEME_NAME}" \
         -configuration Debug \
-        -destination "platform=iOS Simulator,name=iPhone 15,OS=latest" \
+        -destination "platform=iOS Simulator,name=iPhone 16,OS=18.6" \
         -derivedDataPath build
     
     print_success "Simulator build completed"
@@ -157,7 +157,7 @@ run_tests() {
     xcodebuild test \
         -project "${PROJECT_NAME}.xcodeproj" \
         -scheme "${SCHEME_NAME}" \
-        -destination "platform=iOS Simulator,name=iPhone 15,OS=latest" \
+        -destination "platform=iOS Simulator,name=iPhone 16,OS=18.6" \
         -derivedDataPath build
     
     print_success "Tests completed"
@@ -260,5 +260,6 @@ main() {
 
 # Run main function with all arguments
 main "$@"
+
 
 
