@@ -9,4 +9,5 @@ python-dotenv==1.0.0
 pushover.py==0.4
 schedule==1.2.1
 flask>=2.0.0
-werkzeug>=2.0.0 
+werkzeug>=2.0.0
+moviepy>=1.0.3 

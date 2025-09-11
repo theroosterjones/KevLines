@@ -6,6 +6,13 @@ from werkzeug.utils import secure_filename
 import mediapipe as mp
 from datetime import datetime
 import json
+import sys
+
+# Import the working analyzers
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+from hacksquat_analyzer import HackSquatAnalyzer
+from row_analyzer import RowAnalyzer
+from pose_analyzer import PoseAnalyzer
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024  # 500MB max file size
@@ -41,105 +48,6 @@ class FitnessAnalyzer:
             angle = 360-angle
         return angle
     
-    def analyze_pushup(self, video_path, output_path):
-        """Analyze pushup form"""
-        try:
-            cap = cv2.VideoCapture(video_path)
-            if not cap.isOpened():
-                raise Exception("Could not open video file")
-            
-            width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-            height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-            fps = int(cap.get(cv2.CAP_PROP_FPS))
-            
-            print(f"Processing video: {width}x{height} @ {fps}fps")
-            
-            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-            out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
-            
-            if not out.isOpened():
-                raise Exception("Could not create output video file")
-            
-            rep_count = 0
-            form_score = 100
-            feedback = []
-            frame_count = 0
-            
-            while cap.isOpened():
-                ret, frame = cap.read()
-                if not ret:
-                    break
-                
-                frame_count += 1
-                if frame_count % 30 == 0:  # Print progress every 30 frames
-                    print(f"Processing frame {frame_count}")
-                
-                # Process frame
-                image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                image.flags.writeable = False
-                results = self.pose.process(image)
-                image.flags.writeable = True
-                image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-                
-                if results.pose_landmarks:
-                    landmarks = results.pose_landmarks.landmark
-                    
-                    # Get coordinates for pushup analysis
-                    left_shoulder = [landmarks[self.mp_pose.PoseLandmark.LEFT_SHOULDER.value].x,
-                                   landmarks[self.mp_pose.PoseLandmark.LEFT_SHOULDER.value].y]
-                    right_shoulder = [landmarks[self.mp_pose.PoseLandmark.RIGHT_SHOULDER.value].x,
-                                    landmarks[self.mp_pose.PoseLandmark.RIGHT_SHOULDER.value].y]
-                    left_elbow = [landmarks[self.mp_pose.PoseLandmark.LEFT_ELBOW.value].x,
-                                 landmarks[self.mp_pose.PoseLandmark.LEFT_ELBOW.value].y]
-                    right_elbow = [landmarks[self.mp_pose.PoseLandmark.RIGHT_ELBOW.value].x,
-                                  landmarks[self.mp_pose.PoseLandmark.RIGHT_ELBOW.value].y]
-                    left_wrist = [landmarks[self.mp_pose.PoseLandmark.LEFT_WRIST.value].x,
-                                 landmarks[self.mp_pose.PoseLandmark.LEFT_WRIST.value].y]
-                    right_wrist = [landmarks[self.mp_pose.PoseLandmark.RIGHT_WRIST.value].x,
-                                  landmarks[self.mp_pose.PoseLandmark.RIGHT_WRIST.value].y]
-                    
-                    # Calculate angles
-                    left_elbow_angle = self.calculate_angle(left_shoulder, left_elbow, left_wrist)
-                    right_elbow_angle = self.calculate_angle(right_shoulder, right_elbow, right_wrist)
-                    
-                    # Draw pose landmarks
-                    self.mp_drawing.draw_landmarks(
-                        image, results.pose_landmarks, self.mp_pose.POSE_CONNECTIONS)
-                    
-                    # Add angle text
-                    cv2.putText(image, f'Left Elbow: {int(left_elbow_angle)}', (10, 30),
-                               cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-                    cv2.putText(image, f'Right Elbow: {int(right_elbow_angle)}', (10, 60),
-                               cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-                    cv2.putText(image, f'Reps: {rep_count}', (10, 90),
-                               cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-                    cv2.putText(image, f'Form Score: {form_score}', (10, 120),
-                               cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-                else:
-                    # No pose detected
-                    cv2.putText(image, 'No pose detected', (10, 30),
-                               cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-                
-                out.write(image)
-            
-            print(f"Processed {frame_count} frames")
-            cap.release()
-            out.release()
-            
-            return {
-                'rep_count': rep_count,
-                'form_score': form_score,
-                'feedback': feedback,
-                'frames_processed': frame_count
-            }
-            
-        except Exception as e:
-            print(f"Error in analyze_pushup: {str(e)}")
-            if 'cap' in locals():
-                cap.release()
-            if 'out' in locals():
-                out.release()
-            raise e
     
     def analyze_squat(self, video_path, output_path):
         """Analyze squat form"""
@@ -269,12 +177,22 @@ def analyze_video():
         output_filename = f"analyzed_{exercise_type}_{filename}"
         output_path = os.path.join(app.config['OUTPUT_FOLDER'], output_filename)
         
-        if exercise_type == 'pushup':
-            results = analyzer.analyze_pushup(filepath, output_path)
-        elif exercise_type == 'squat':
+        if exercise_type == 'squat':
             results = analyzer.analyze_squat(filepath, output_path)
+        elif exercise_type == 'hacksquat':
+            hacksquat_analyzer = HackSquatAnalyzer()
+            hacksquat_analyzer.process_video(filepath, output_path, preview=False, compress=True)
+            results = {'message': 'Hack squat analysis completed', 'output_file': output_filename}
+        elif exercise_type == 'row':
+            row_analyzer = RowAnalyzer()
+            row_analyzer.process_video(filepath, output_path, preview=False, compress=True)
+            results = {'message': 'Row analysis completed', 'output_file': output_filename}
+        elif exercise_type == 'lat_pulldown':
+            pose_analyzer = PoseAnalyzer()
+            pose_analyzer.process_video(filepath, output_path, preview=False, compress=True)
+            results = {'message': 'Lat pulldown analysis completed', 'output_file': output_filename}
         else:
-            return jsonify({'error': 'Unsupported exercise type'}), 400
+            return jsonify({'error': 'Unsupported exercise type. Supported types: squat, hacksquat, row, lat_pulldown'}), 400
         
         return jsonify({
             'success': True,
