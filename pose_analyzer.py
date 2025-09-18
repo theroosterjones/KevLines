@@ -5,7 +5,12 @@ import os
 import sys
 import subprocess
 import math
-from moviepy.editor import VideoFileClip
+try:
+    from moviepy.editor import VideoFileClip
+    MOVIEPY_AVAILABLE = True
+except ImportError:
+    MOVIEPY_AVAILABLE = False
+    print("Warning: MoviePy not available. Video compression will be disabled.")
 import argparse
 
 class PoseAnalyzer:

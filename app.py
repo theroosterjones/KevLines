@@ -2,6 +2,7 @@ import os
 import cv2
 import numpy as np
 from flask import Flask, render_template, request, jsonify, send_file
+from flask_cors import CORS
 from werkzeug.utils import secure_filename
 import mediapipe as mp
 from datetime import datetime
@@ -15,6 +16,7 @@ from row_analyzer import RowAnalyzer
 from pose_analyzer import PoseAnalyzer
 
 app = Flask(__name__)
+CORS(app)  # Enable CORS for iOS app requests
 app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024  # 500MB max file size
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['OUTPUT_FOLDER'] = 'outputs'
@@ -131,6 +133,16 @@ def test():
     return jsonify({
         'status': 'running',
         'message': 'KevLines Fitness Analyzer is working!',
+        'timestamp': datetime.now().isoformat()
+    })
+
+@app.route('/api/status')
+def api_status():
+    """API status endpoint for iOS app"""
+    return jsonify({
+        'status': 'online',
+        'version': '1.0.0',
+        'supported_exercises': ['squat', 'hacksquat', 'row', 'lat_pulldown'],
         'timestamp': datetime.now().isoformat()
     })
 

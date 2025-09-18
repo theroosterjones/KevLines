@@ -6,6 +6,7 @@ import CoreML
 
 struct ExerciseView: View {
     @StateObject private var poseAnalyzer = PoseAnalyzer()
+    @StateObject private var apiService = APIService.shared
     @State private var selectedExercise: ExerciseType = .pushup
     @State private var showingExercisePicker = false
     @State private var showingWorkoutSummary = false
@@ -14,6 +15,11 @@ struct ExerciseView: View {
     @State private var selectedVideoURL: URL?
     @State private var isAnalyzing = false
     @State private var showingVideoPicker = false
+    @State private var uploadedFilename: String?
+    @State private var analyzedVideoURL: URL?
+    @State private var backendStatus: String = "Checking..."
+    @State private var showingError = false
+    @State private var errorMessage = ""
     
     var body: some View {
         NavigationView {
@@ -22,26 +28,40 @@ struct ExerciseView: View {
                 Color.black.edgesIgnoringSafeArea(.all)
                 
                 VStack(spacing: 30) {
-                    // Exercise selection
-                    HStack {
-                        Button(action: {
-                            showingExercisePicker = true
-                        }) {
-                            HStack {
-                                Image(systemName: "figure.strengthtraining.traditional")
-                                Text(selectedExercise.rawValue)
-                                    .fontWeight(.medium)
-                            }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(Color.orange.opacity(0.8))
-                            .foregroundColor(.white)
-                            .cornerRadius(20)
+                    // Backend status and exercise selection
+                    VStack(spacing: 10) {
+                        // Backend status indicator
+                        HStack {
+                            Image(systemName: backendStatus == "online" ? "checkmark.circle.fill" : "xmark.circle.fill")
+                                .foregroundColor(backendStatus == "online" ? .green : .red)
+                            Text("Backend: \(backendStatus)")
+                                .font(.caption)
+                                .foregroundColor(.white)
+                            Spacer()
                         }
+                        .padding(.horizontal)
                         
-                        Spacer()
+                        // Exercise selection
+                        HStack {
+                            Button(action: {
+                                showingExercisePicker = true
+                            }) {
+                                HStack {
+                                    Image(systemName: "figure.strengthtraining.traditional")
+                                    Text(selectedExercise.rawValue)
+                                        .fontWeight(.medium)
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(Color.orange.opacity(0.8))
+                                .foregroundColor(.white)
+                                .cornerRadius(20)
+                            }
+                            
+                            Spacer()
+                        }
+                        .padding(.horizontal)
                     }
-                    .padding()
                     
                     // Video selection area
                     VStack(spacing: 20) {
@@ -178,8 +198,15 @@ struct ExerciseView: View {
             }
                     .onAppear {
             print("🚀 ExerciseView appeared!")
+            // Check backend status
+            checkBackendStatus()
             // Auto-load test video for simulator testing
             simulateVideoSelection()
+        }
+        .alert("Error", isPresented: $showingError) {
+            Button("OK") { }
+        } message: {
+            Text(errorMessage)
         }
         }
     }
@@ -224,29 +251,90 @@ struct ExerciseView: View {
         isAnalyzing = true
         workoutStartTime = Date()
         
-        // Simulate video analysis
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
-            poseAnalyzer.setExerciseType(selectedExercise)
-            poseAnalyzer.simulateVideoAnalysis()
-            isAnalyzing = false
-            showingWorkoutSummary = true
+        Task {
+            do {
+                // Step 1: Upload video to backend
+                print("📤 Uploading video to backend...")
+                let uploadResponse = try await apiService.uploadVideo(videoURL)
+                uploadedFilename = uploadResponse.filename
+                
+                // Step 2: Analyze video
+                print("🔍 Analyzing video with backend...")
+                let analysisResponse = try await apiService.analyzeVideo(
+                    filename: uploadResponse.filename,
+                    exerciseType: selectedExercise.apiString
+                )
+                
+                // Step 3: Download analyzed video
+                print("📥 Downloading analyzed video...")
+                let analyzedVideo = try await apiService.downloadAnalyzedVideo(filename: analysisResponse.output_file)
+                analyzedVideoURL = analyzedVideo
+                
+                // Update UI on main thread
+                await MainActor.run {
+                    // Update pose analyzer with real results
+                    poseAnalyzer.setExerciseType(selectedExercise)
+                    poseAnalyzer.repCount = analysisResponse.results.rep_count ?? 0
+                    poseAnalyzer.formScore = Float(analysisResponse.results.form_score ?? 85)
+                    
+                    isAnalyzing = false
+                    showingWorkoutSummary = true
+                }
+                
+                print("✅ Video analysis completed successfully!")
+                
+            } catch {
+                print("❌ Analysis failed: \(error.localizedDescription)")
+                await MainActor.run {
+                    isAnalyzing = false
+                    errorMessage = error.localizedDescription
+                    showingError = true
+                }
+            }
+        }
+    }
+    
+    private func checkBackendStatus() {
+        Task {
+            do {
+                let status = try await apiService.checkBackendStatus()
+                await MainActor.run {
+                    backendStatus = status.status
+                    print("✅ Backend is \(status.status)")
+                }
+            } catch {
+                await MainActor.run {
+                    backendStatus = "offline"
+                    print("❌ Backend is offline: \(error.localizedDescription)")
+                }
+            }
         }
     }
     
     private func downloadAnalyzedVideo() {
-        guard let videoURL = selectedVideoURL else { return }
+        guard let analyzedVideoURL = analyzedVideoURL else {
+            errorMessage = "No analyzed video available. Please analyze a video first."
+            showingError = true
+            return
+        }
         
         print("📥 Starting video download process...")
         
-        // For now, simulate the download process
-        // In a real implementation, this would:
-        // 1. Process the video with pose analysis lines
-        // 2. Save to Photos library or Files app
-        // 3. Show success message
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-            print("📥 Video download completed!")
-            // Here you would show a success alert or save to Photos
+        // Save to Photos library
+        Task {
+            do {
+                // For now, just show success message
+                // In a real implementation, you would save to Photos library
+                await MainActor.run {
+                    print("📥 Video download completed!")
+                    // Here you would show a success alert or save to Photos
+                }
+            } catch {
+                await MainActor.run {
+                    errorMessage = "Failed to save video: \(error.localizedDescription)"
+                    showingError = true
+                }
+            }
         }
     }
 }
