@@ -42,10 +42,17 @@ class APIService: ObservableObject {
     static let shared = APIService()
     
     // Configuration
-    private let baseURL = "http://localhost:3000"  // Change this to your server URL when deployed
+    private let baseURL = "http://192.168.1.116:3000"  // Your computer's IP address for iPhone testing
     private let session = URLSession.shared
     
     private init() {}
+    
+    // MARK: - Network Configuration
+    func updateServerURL(with ipAddress: String) {
+        // This method can be called to update the server URL dynamically
+        // For now, we'll use the hardcoded IP address
+        print("🌐 Server URL configured for: \(baseURL)")
+    }
     
     // MARK: - API Status Check
     func checkBackendStatus() async throws -> StatusResponse {

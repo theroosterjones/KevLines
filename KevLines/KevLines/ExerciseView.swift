@@ -1,6 +1,7 @@
 import SwiftUI
 import AVFoundation
 import PhotosUI
+import Photos
 import Vision
 import CoreML
 
@@ -13,6 +14,7 @@ struct ExerciseView: View {
     @State private var workoutStartTime: Date?
     @State private var cameraPermissionGranted = true
     @State private var selectedVideoURL: URL?
+    @State private var selectedVideoItem: PhotosPickerItem?
     @State private var isAnalyzing = false
     @State private var showingVideoPicker = false
     @State private var uploadedFilename: String?
@@ -20,6 +22,8 @@ struct ExerciseView: View {
     @State private var backendStatus: String = "Checking..."
     @State private var showingError = false
     @State private var errorMessage = ""
+    @State private var showingSafetyWarning = true
+    @State private var safetyAccepted = false
     
     var body: some View {
         NavigationView {
@@ -188,12 +192,10 @@ struct ExerciseView: View {
                     recordedVideoURL: selectedVideoURL
                 )
             }
-            .photosPicker(isPresented: $showingVideoPicker, selection: .constant(nil), matching: .videos)
-            .onChange(of: showingVideoPicker) { newValue in
-                if !newValue {
-                    // Handle video selection
-                    // For now, we'll simulate video selection
-                    simulateVideoSelection()
+            .photosPicker(isPresented: $showingVideoPicker, selection: $selectedVideoItem, matching: .videos)
+            .onChange(of: selectedVideoItem) { newValue in
+                if let newValue = newValue {
+                    loadSelectedVideo(newValue)
                 }
             }
                     .onAppear {
@@ -208,6 +210,63 @@ struct ExerciseView: View {
         } message: {
             Text(errorMessage)
         }
+        .alert("⚠️ Safety Warning", isPresented: $showingSafetyWarning) {
+            Button("I Understand - Continue") {
+                safetyAccepted = true
+            }
+            Button("Cancel", role: .cancel) {
+                // User can still use the app but with awareness
+                safetyAccepted = true
+            }
+        } message: {
+            Text("This is a development app. Please ensure you have backed up your iPhone before testing. The app will access your Photos library and process videos locally on your network.")
+        }
+        }
+    }
+    
+    private func loadSelectedVideo(_ item: PhotosPickerItem) {
+        print("🎯 Loading selected video from PhotosPicker...")
+        
+        Task {
+            do {
+                // Load the video data from the PhotosPickerItem
+                guard let videoData = try await item.loadTransferable(type: Data.self) else {
+                    print("❌ Failed to load video data")
+                    await MainActor.run {
+                        errorMessage = "Failed to load video from Photos"
+                        showingError = true
+                    }
+                    return
+                }
+                
+                // Safety check: File size limit (100MB for safety)
+                let maxFileSize = 100 * 1024 * 1024 // 100MB
+                if videoData.count > maxFileSize {
+                    print("❌ Video file too large: \(videoData.count) bytes")
+                    await MainActor.run {
+                        errorMessage = "Video file is too large (max 100MB). Please select a smaller video for testing."
+                        showingError = true
+                    }
+                    return
+                }
+                
+                // Save to temporary directory
+                let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("selected_video.mov")
+                try videoData.write(to: tempURL)
+                
+                await MainActor.run {
+                    selectedVideoURL = tempURL
+                    print("✅ Video loaded successfully: \(tempURL.path)")
+                    print("✅ File size: \(videoData.count) bytes (\(String(format: "%.1f", Double(videoData.count) / 1024 / 1024)) MB)")
+                }
+                
+            } catch {
+                print("❌ Error loading video: \(error.localizedDescription)")
+                await MainActor.run {
+                    errorMessage = "Failed to load video: \(error.localizedDescription)"
+                    showingError = true
+                }
+            }
         }
     }
     
@@ -323,18 +382,56 @@ struct ExerciseView: View {
         // Save to Photos library
         Task {
             do {
-                // For now, just show success message
-                // In a real implementation, you would save to Photos library
-                await MainActor.run {
-                    print("📥 Video download completed!")
-                    // Here you would show a success alert or save to Photos
+                // Request permission to save to Photos library
+                let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
+                
+                guard status == .authorized || status == .limited else {
+                    await MainActor.run {
+                        errorMessage = "Permission denied to save to Photos library"
+                        showingError = true
+                    }
+                    return
                 }
-            } catch {
+                
+                // Save video to Photos library
+                try await PHPhotoLibrary.shared().performChanges {
+                    let creationRequest = PHAssetCreationRequest.forAsset()
+                    creationRequest.addResource(with: .video, fileURL: analyzedVideoURL, options: nil)
+                }
+                
                 await MainActor.run {
-                    errorMessage = "Failed to save video: \(error.localizedDescription)"
+                    print("📥 Video saved to Photos library successfully!")
+                    // Show success message
+                    errorMessage = "Analyzed video saved to Photos library!"
+                    showingError = true
+                }
+                
+            } catch {
+                print("❌ Error saving video to Photos: \(error.localizedDescription)")
+                await MainActor.run {
+                    errorMessage = "Failed to save video to Photos: \(error.localizedDescription)"
                     showingError = true
                 }
             }
+        }
+    }
+    
+    // MARK: - Cleanup Functions
+    private func cleanupTemporaryFiles() {
+        print("🧹 Cleaning up temporary files...")
+        
+        // Clean up temporary video files
+        let tempDir = FileManager.default.temporaryDirectory
+        do {
+            let tempFiles = try FileManager.default.contentsOfDirectory(at: tempDir, includingPropertiesForKeys: nil)
+            for file in tempFiles {
+                if file.lastPathComponent.contains("selected_video") || file.lastPathComponent.contains("analyzed_") {
+                    try FileManager.default.removeItem(at: file)
+                    print("🗑️ Removed temporary file: \(file.lastPathComponent)")
+                }
+            }
+        } catch {
+            print("⚠️ Error cleaning up temporary files: \(error)")
         }
     }
 }
