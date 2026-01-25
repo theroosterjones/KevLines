@@ -14,24 +14,45 @@ except ImportError:
 import argparse
 
 class PoseAnalyzer:
-    def __init__(self):
+    def __init__(self, side='left'):
+        """
+        Initialize Pose Analyzer (for lat pulldown)
+        Args:
+            side: 'left' or 'right' - which side of the body to analyze (default: 'left')
+        """
+        self.side = side.lower()
+        if self.side not in ['left', 'right']:
+            raise ValueError("side must be 'left' or 'right'")
+        
         self.mp_drawing = mp.solutions.drawing_utils
         self.mp_pose = mp.solutions.pose
         
         # Customize drawing style
         self.drawing_spec = self.mp_drawing.DrawingSpec(thickness=2, circle_radius=2)
         
-        # Define which landmarks to show (left side only)
+        # Select landmarks based on side
+        if self.side == 'left':
+            self.shoulder_landmark = self.mp_pose.PoseLandmark.LEFT_SHOULDER
+            self.elbow_landmark = self.mp_pose.PoseLandmark.LEFT_ELBOW
+            self.wrist_landmark = self.mp_pose.PoseLandmark.LEFT_WRIST
+            self.hip_landmark = self.mp_pose.PoseLandmark.LEFT_HIP
+        else:  # right
+            self.shoulder_landmark = self.mp_pose.PoseLandmark.RIGHT_SHOULDER
+            self.elbow_landmark = self.mp_pose.PoseLandmark.RIGHT_ELBOW
+            self.wrist_landmark = self.mp_pose.PoseLandmark.RIGHT_WRIST
+            self.hip_landmark = self.mp_pose.PoseLandmark.RIGHT_HIP
+        
+        # Define which landmarks to show
         self.landmark_list = [
-            self.mp_pose.PoseLandmark.LEFT_SHOULDER,
-            self.mp_pose.PoseLandmark.LEFT_ELBOW,
-            self.mp_pose.PoseLandmark.LEFT_WRIST,
-            self.mp_pose.PoseLandmark.LEFT_HIP
+            self.shoulder_landmark,
+            self.elbow_landmark,
+            self.wrist_landmark,
+            self.hip_landmark
         ]
         
-        # Define connections between landmarks (white skeleton lines, left side only)
+        # Define connections between landmarks
         self.custom_connections = frozenset([
-            (self.mp_pose.PoseLandmark.LEFT_SHOULDER, self.mp_pose.PoseLandmark.LEFT_HIP)
+            (self.shoulder_landmark, self.hip_landmark)
         ])
         
         self.pose = self.mp_pose.Pose(
@@ -296,15 +317,15 @@ class PoseAnalyzer:
                 try:
                     landmarks = results.pose_landmarks.landmark
                     
-                    # Get coordinates
-                    shoulder = [landmarks[self.mp_pose.PoseLandmark.LEFT_SHOULDER.value].x,
-                              landmarks[self.mp_pose.PoseLandmark.LEFT_SHOULDER.value].y]
-                    elbow = [landmarks[self.mp_pose.PoseLandmark.LEFT_ELBOW.value].x,
-                            landmarks[self.mp_pose.PoseLandmark.LEFT_ELBOW.value].y]
-                    wrist = [landmarks[self.mp_pose.PoseLandmark.LEFT_WRIST.value].x,
-                            landmarks[self.mp_pose.PoseLandmark.LEFT_WRIST.value].y]
-                    hip = [landmarks[self.mp_pose.PoseLandmark.LEFT_HIP.value].x,
-                          landmarks[self.mp_pose.PoseLandmark.LEFT_HIP.value].y]
+                    # Get coordinates (using selected side)
+                    shoulder = [landmarks[self.shoulder_landmark.value].x,
+                              landmarks[self.shoulder_landmark.value].y]
+                    elbow = [landmarks[self.elbow_landmark.value].x,
+                            landmarks[self.elbow_landmark.value].y]
+                    wrist = [landmarks[self.wrist_landmark.value].x,
+                            landmarks[self.wrist_landmark.value].y]
+                    hip = [landmarks[self.hip_landmark.value].x,
+                          landmarks[self.hip_landmark.value].y]
                     
                     # Calculate angles
                     elbow_angle = self.calculate_angle(shoulder, elbow, wrist)
@@ -395,9 +416,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Process video with pose analysis.')
     parser.add_argument('--input', type=str, default="/Users/kevinrooster/Downloads/shitlatpulldown.mov", help='Input video path')
     parser.add_argument('--output', type=str, default="analyzed_shitlatpulldown", help='Output video path')
+    parser.add_argument('--side', type=str, default='left', choices=['left', 'right'], help='Which side to analyze (left or right)')
     parser.add_argument('--preview', action='store_true', help='Enable preview window')
     parser.add_argument('--no-compress', action='store_true', help='Disable compression')
     args = parser.parse_args()
 
-    analyzer = PoseAnalyzer()
+    analyzer = PoseAnalyzer(side=args.side)
     analyzer.process_video(args.input, args.output, preview=args.preview, compress=not args.no_compress) 

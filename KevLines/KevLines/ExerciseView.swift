@@ -9,6 +9,7 @@ struct ExerciseView: View {
     @StateObject private var poseAnalyzer = PoseAnalyzer()
     @StateObject private var apiService = APIService.shared
     @State private var selectedExercise: ExerciseType = .pushup
+    @State private var selectedSide: String = "left"  // "left" or "right"
     @State private var showingExercisePicker = false
     @State private var showingWorkoutSummary = false
     @State private var workoutStartTime: Date?
@@ -63,6 +64,20 @@ struct ExerciseView: View {
                             }
                             
                             Spacer()
+                            
+                            // Side selection (only show for exercises that support it)
+                            if selectedExercise != .pushup {
+                                Picker("Side", selection: $selectedSide) {
+                                    Text("Left").tag("left")
+                                    Text("Right").tag("right")
+                                }
+                                .pickerStyle(SegmentedPickerStyle())
+                                .frame(width: 120)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Color.gray.opacity(0.3))
+                                .cornerRadius(10)
+                            }
                         }
                         .padding(.horizontal)
                     }
@@ -312,9 +327,11 @@ struct ExerciseView: View {
                 // Step 2: Analyze video
                 print("🔍 Analyzing video with backend...")
                 print("🔍 Exercise type: \(selectedExercise.apiString)")
+                print("🔍 Side: \(selectedSide)")
                 let analysisResponse = try await apiService.analyzeVideo(
                     filename: uploadResponse.filename,
-                    exerciseType: selectedExercise.apiString
+                    exerciseType: selectedExercise.apiString,
+                    side: selectedSide
                 )
                 print("✅ Analysis response received: \(analysisResponse)")
                 

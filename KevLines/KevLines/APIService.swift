@@ -109,7 +109,7 @@ class APIService: ObservableObject {
     }
     
     // MARK: - Video Analysis
-    func analyzeVideo(filename: String, exerciseType: String) async throws -> AnalysisResponse {
+    func analyzeVideo(filename: String, exerciseType: String, side: String = "left") async throws -> AnalysisResponse {
         guard let url = URL(string: "\(baseURL)/analyze") else {
             throw APIError.invalidURL
         }
@@ -120,12 +120,13 @@ class APIService: ObservableObject {
         
         let requestBody = [
             "filename": filename,
-            "exercise_type": exerciseType
+            "exercise_type": exerciseType,
+            "side": side
         ]
         
         request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
         
-        print("🔍 Analyzing video: \(filename) for exercise: \(exerciseType)")
+        print("🔍 Analyzing video: \(filename) for exercise: \(exerciseType), side: \(side)")
         
         let (data, response) = try await session.data(for: request)
         

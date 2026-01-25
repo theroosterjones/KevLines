@@ -176,9 +176,14 @@ def analyze_video():
     data = request.get_json()
     filename = data.get('filename')
     exercise_type = data.get('exercise_type', 'pushup')
+    side = data.get('side', 'left')  # Default to 'left' for backward compatibility
     
     if not filename:
         return jsonify({'error': 'No filename provided'}), 400
+    
+    # Validate side parameter
+    if side not in ['left', 'right']:
+        side = 'left'  # Default to left if invalid
     
     filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
     
@@ -193,7 +198,7 @@ def analyze_video():
         if exercise_type == 'squat':
             results = analyzer.analyze_squat(filepath, output_path)
         elif exercise_type == 'hacksquat':
-            hacksquat_analyzer = HackSquatAnalyzer()
+            hacksquat_analyzer = HackSquatAnalyzer(side=side)
             hacksquat_analyzer.process_video(filepath, output_path, preview=False, compress=True)
             results = {
                 'message': 'Hack squat analysis completed', 
@@ -203,7 +208,7 @@ def analyze_video():
                 'feedback': ['Hack squat analysis completed successfully']
             }
         elif exercise_type == 'row':
-            row_analyzer = RowAnalyzer()
+            row_analyzer = RowAnalyzer(side=side)
             row_analyzer.process_video(filepath, output_path, preview=False, compress=True)
             results = {
                 'message': 'Row analysis completed', 
@@ -213,7 +218,7 @@ def analyze_video():
                 'feedback': ['Row analysis completed successfully']
             }
         elif exercise_type == 'lat_pulldown':
-            pose_analyzer = PoseAnalyzer()
+            pose_analyzer = PoseAnalyzer(side=side)
             pose_analyzer.process_video(filepath, output_path, preview=False, compress=True)
             results = {
                 'message': 'Lat pulldown analysis completed', 
@@ -223,7 +228,7 @@ def analyze_video():
                 'feedback': ['Lat pulldown analysis completed successfully']
             }
         elif exercise_type == 'backsquat':
-            backsquat_analyzer = BackSquatAnalyzer()
+            backsquat_analyzer = BackSquatAnalyzer(side=side)
             backsquat_analyzer.process_video(filepath, output_path, preview=False, compress=True)
             results = {
                 'message': 'Back squat analysis completed', 

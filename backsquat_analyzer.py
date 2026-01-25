@@ -14,19 +14,40 @@ except ImportError:
 import argparse
 
 class BackSquatAnalyzer:
-    def __init__(self):
+    def __init__(self, side='left'):
+        """
+        Initialize Back Squat Analyzer
+        Args:
+            side: 'left' or 'right' - which side of the body to analyze (default: 'left')
+        """
+        self.side = side.lower()
+        if self.side not in ['left', 'right']:
+            raise ValueError("side must be 'left' or 'right'")
+        
         self.mp_drawing = mp.solutions.drawing_utils
         self.mp_pose = mp.solutions.pose
         
         # Customize drawing style
         self.drawing_spec = self.mp_drawing.DrawingSpec(thickness=2, circle_radius=2)
         
-        # Define which landmarks to show (left side for back squat analysis)
+        # Select landmarks based on side
+        if self.side == 'left':
+            self.ankle_landmark = self.mp_pose.PoseLandmark.LEFT_ANKLE
+            self.knee_landmark = self.mp_pose.PoseLandmark.LEFT_KNEE
+            self.hip_landmark = self.mp_pose.PoseLandmark.LEFT_HIP
+            self.shoulder_landmark = self.mp_pose.PoseLandmark.LEFT_SHOULDER
+        else:  # right
+            self.ankle_landmark = self.mp_pose.PoseLandmark.RIGHT_ANKLE
+            self.knee_landmark = self.mp_pose.PoseLandmark.RIGHT_KNEE
+            self.hip_landmark = self.mp_pose.PoseLandmark.RIGHT_HIP
+            self.shoulder_landmark = self.mp_pose.PoseLandmark.RIGHT_SHOULDER
+        
+        # Define which landmarks to show
         self.landmark_list = [
-            self.mp_pose.PoseLandmark.LEFT_ANKLE,
-            self.mp_pose.PoseLandmark.LEFT_KNEE,
-            self.mp_pose.PoseLandmark.LEFT_HIP,
-            self.mp_pose.PoseLandmark.LEFT_SHOULDER  # For spine line
+            self.ankle_landmark,
+            self.knee_landmark,
+            self.hip_landmark,
+            self.shoulder_landmark  # For spine line
         ]
         
         self.pose = self.mp_pose.Pose(
@@ -345,21 +366,21 @@ class BackSquatAnalyzer:
                 try:
                     landmarks = results.pose_landmarks.landmark
                     
-                    # Get raw coordinates for back squat analysis
-                    raw_ankle = [landmarks[self.mp_pose.PoseLandmark.LEFT_ANKLE.value].x,
-                                landmarks[self.mp_pose.PoseLandmark.LEFT_ANKLE.value].y]
-                    raw_knee = [landmarks[self.mp_pose.PoseLandmark.LEFT_KNEE.value].x,
-                               landmarks[self.mp_pose.PoseLandmark.LEFT_KNEE.value].y]
-                    raw_hip = [landmarks[self.mp_pose.PoseLandmark.LEFT_HIP.value].x,
-                              landmarks[self.mp_pose.PoseLandmark.LEFT_HIP.value].y]
-                    raw_shoulder = [landmarks[self.mp_pose.PoseLandmark.LEFT_SHOULDER.value].x,
-                                   landmarks[self.mp_pose.PoseLandmark.LEFT_SHOULDER.value].y]
+                    # Get raw coordinates for back squat analysis (using selected side)
+                    raw_ankle = [landmarks[self.ankle_landmark.value].x,
+                                landmarks[self.ankle_landmark.value].y]
+                    raw_knee = [landmarks[self.knee_landmark.value].x,
+                               landmarks[self.knee_landmark.value].y]
+                    raw_hip = [landmarks[self.hip_landmark.value].x,
+                              landmarks[self.hip_landmark.value].y]
+                    raw_shoulder = [landmarks[self.shoulder_landmark.value].x,
+                                   landmarks[self.shoulder_landmark.value].y]
                     
                     # Apply smoothing to all landmarks
-                    ankle = self.smooth_landmark('left_ankle', raw_ankle)
-                    knee = self.smooth_landmark('left_knee', raw_knee)
-                    hip = self.smooth_landmark('left_hip', raw_hip)
-                    shoulder = self.smooth_landmark('left_shoulder', raw_shoulder)
+                    ankle = self.smooth_landmark(f'{self.side}_ankle', raw_ankle)
+                    knee = self.smooth_landmark(f'{self.side}_knee', raw_knee)
+                    hip = self.smooth_landmark(f'{self.side}_hip', raw_hip)
+                    shoulder = self.smooth_landmark(f'{self.side}_shoulder', raw_shoulder)
                     
                     # Calculate angles for back squat form
                     knee_angle = self.calculate_angle(ankle, knee, hip)
@@ -520,9 +541,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Process video with barbell back squat form analysis.')
     parser.add_argument('--input', type=str, default="/Users/kevinrooster/Downloads/backsquat.mov", help='Input video path')
     parser.add_argument('--output', type=str, default="analyzed_backsquat", help='Output video path')
+    parser.add_argument('--side', type=str, default='left', choices=['left', 'right'], help='Which side to analyze (left or right)')
     parser.add_argument('--preview', action='store_true', help='Enable preview window')
     parser.add_argument('--no-compress', action='store_true', help='Disable compression')
     args = parser.parse_args()
 
-    analyzer = BackSquatAnalyzer()
+    analyzer = BackSquatAnalyzer(side=args.side)
     analyzer.process_video(args.input, args.output, preview=args.preview, compress=not args.no_compress)

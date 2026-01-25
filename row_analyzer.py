@@ -14,27 +14,54 @@ except ImportError:
 import argparse
 
 class RowAnalyzer:
-    def __init__(self):
+    def __init__(self, side='left'):
+        """
+        Initialize Row Analyzer
+        Args:
+            side: 'left' or 'right' - which side of the body to analyze (default: 'left')
+        """
+        self.side = side.lower()
+        if self.side not in ['left', 'right']:
+            raise ValueError("side must be 'left' or 'right'")
+        
         self.mp_drawing = mp.solutions.drawing_utils
         self.mp_pose = mp.solutions.pose
         
         # Customize drawing style
         self.drawing_spec = self.mp_drawing.DrawingSpec(thickness=2, circle_radius=2)
         
-        # Define which landmarks to show (left side only)
+        # Select landmarks based on side (for primary arm analysis)
+        if self.side == 'left':
+            self.shoulder_landmark = self.mp_pose.PoseLandmark.LEFT_SHOULDER
+            self.elbow_landmark = self.mp_pose.PoseLandmark.LEFT_ELBOW
+            self.wrist_landmark = self.mp_pose.PoseLandmark.LEFT_WRIST
+            self.hip_landmark = self.mp_pose.PoseLandmark.LEFT_HIP
+            self.ear_landmark = self.mp_pose.PoseLandmark.LEFT_EAR
+            self.opposite_shoulder = self.mp_pose.PoseLandmark.RIGHT_SHOULDER
+            self.opposite_ear = self.mp_pose.PoseLandmark.RIGHT_EAR
+        else:  # right
+            self.shoulder_landmark = self.mp_pose.PoseLandmark.RIGHT_SHOULDER
+            self.elbow_landmark = self.mp_pose.PoseLandmark.RIGHT_ELBOW
+            self.wrist_landmark = self.mp_pose.PoseLandmark.RIGHT_WRIST
+            self.hip_landmark = self.mp_pose.PoseLandmark.RIGHT_HIP
+            self.ear_landmark = self.mp_pose.PoseLandmark.RIGHT_EAR
+            self.opposite_shoulder = self.mp_pose.PoseLandmark.LEFT_SHOULDER
+            self.opposite_ear = self.mp_pose.PoseLandmark.LEFT_EAR
+        
+        # Define which landmarks to show (includes both shoulders for back line)
         self.landmark_list = [
-            self.mp_pose.PoseLandmark.LEFT_SHOULDER,
-            self.mp_pose.PoseLandmark.LEFT_ELBOW,
-            self.mp_pose.PoseLandmark.LEFT_WRIST,
-            self.mp_pose.PoseLandmark.LEFT_HIP,
-            self.mp_pose.PoseLandmark.RIGHT_SHOULDER,  # For back line
-            self.mp_pose.PoseLandmark.LEFT_EAR,  # For back alignment
-            self.mp_pose.PoseLandmark.RIGHT_EAR  # For back alignment
+            self.shoulder_landmark,
+            self.elbow_landmark,
+            self.wrist_landmark,
+            self.hip_landmark,
+            self.opposite_shoulder,  # For back line
+            self.ear_landmark,  # For back alignment
+            self.opposite_ear  # For back alignment
         ]
         
-        # Define connections between landmarks (white skeleton lines, left side only)
+        # Define connections between landmarks (back line uses both shoulders)
         self.custom_connections = frozenset([
-            (self.mp_pose.PoseLandmark.LEFT_SHOULDER, self.mp_pose.PoseLandmark.RIGHT_SHOULDER)  # Back line
+            (self.shoulder_landmark, self.opposite_shoulder)  # Back line
         ])
         
         self.pose = self.mp_pose.Pose(
@@ -47,6 +74,10 @@ class RowAnalyzer:
         
         # Initialize smoothed landmark positions (stored as [x, y] coordinates)
         self.smoothed_landmarks = {}
+    
+    def opposite_side(self):
+        """Return the opposite side"""
+        return 'right' if self.side == 'left' else 'left'
 
     def calculate_spine_landmarks(self, left_shoulder, right_shoulder, hip):
         """
@@ -395,31 +426,31 @@ class RowAnalyzer:
                 try:
                     landmarks = results.pose_landmarks.landmark
                     
-                    # Get raw coordinates
-                    raw_shoulder = [landmarks[self.mp_pose.PoseLandmark.LEFT_SHOULDER.value].x,
-                                   landmarks[self.mp_pose.PoseLandmark.LEFT_SHOULDER.value].y]
-                    raw_elbow = [landmarks[self.mp_pose.PoseLandmark.LEFT_ELBOW.value].x,
-                                 landmarks[self.mp_pose.PoseLandmark.LEFT_ELBOW.value].y]
-                    raw_wrist = [landmarks[self.mp_pose.PoseLandmark.LEFT_WRIST.value].x,
-                                landmarks[self.mp_pose.PoseLandmark.LEFT_WRIST.value].y]
-                    raw_hip = [landmarks[self.mp_pose.PoseLandmark.LEFT_HIP.value].x,
-                              landmarks[self.mp_pose.PoseLandmark.LEFT_HIP.value].y]
-                    raw_right_shoulder = [landmarks[self.mp_pose.PoseLandmark.RIGHT_SHOULDER.value].x,
-                                         landmarks[self.mp_pose.PoseLandmark.RIGHT_SHOULDER.value].y]
+                    # Get raw coordinates (using selected side)
+                    raw_shoulder = [landmarks[self.shoulder_landmark.value].x,
+                                   landmarks[self.shoulder_landmark.value].y]
+                    raw_elbow = [landmarks[self.elbow_landmark.value].x,
+                                 landmarks[self.elbow_landmark.value].y]
+                    raw_wrist = [landmarks[self.wrist_landmark.value].x,
+                                landmarks[self.wrist_landmark.value].y]
+                    raw_hip = [landmarks[self.hip_landmark.value].x,
+                              landmarks[self.hip_landmark.value].y]
+                    raw_opposite_shoulder = [landmarks[self.opposite_shoulder.value].x,
+                                            landmarks[self.opposite_shoulder.value].y]
                     
                     # Apply smoothing to all landmarks
-                    shoulder = self.smooth_landmark('left_shoulder', raw_shoulder)
-                    elbow = self.smooth_landmark('left_elbow', raw_elbow)
-                    wrist = self.smooth_landmark('left_wrist', raw_wrist)
-                    hip = self.smooth_landmark('left_hip', raw_hip)
-                    right_shoulder_back = self.smooth_landmark('right_shoulder', raw_right_shoulder)
+                    shoulder = self.smooth_landmark(f'{self.side}_shoulder', raw_shoulder)
+                    elbow = self.smooth_landmark(f'{self.side}_elbow', raw_elbow)
+                    wrist = self.smooth_landmark(f'{self.side}_wrist', raw_wrist)
+                    hip = self.smooth_landmark(f'{self.side}_hip', raw_hip)
+                    opposite_shoulder_back = self.smooth_landmark(f'{self.opposite_side()}_shoulder', raw_opposite_shoulder)
                     
-                    # Left shoulder for back line is same as shoulder
-                    left_shoulder_back = shoulder
+                    # Shoulder for back line
+                    shoulder_back = shoulder
                     
                     # Calculate chest position (midpoint between shoulders)
-                    raw_chest = [(raw_shoulder[0] + raw_right_shoulder[0]) / 2,
-                                (raw_shoulder[1] + raw_right_shoulder[1]) / 2]
+                    raw_chest = [(raw_shoulder[0] + raw_opposite_shoulder[0]) / 2,
+                                (raw_shoulder[1] + raw_opposite_shoulder[1]) / 2]
                     chest = self.smooth_landmark('chest', raw_chest)
                     
                     # Calculate angles
@@ -427,7 +458,7 @@ class RowAnalyzer:
                     shoulder_angle = self.calculate_angle(hip, shoulder, elbow)
                     
                     # Calculate spine landmarks
-                    spine_landmarks = self.calculate_spine_landmarks(left_shoulder_back, right_shoulder_back, hip)
+                    spine_landmarks = self.calculate_spine_landmarks(shoulder_back, opposite_shoulder_back, hip)
                     
                     # Visualize
                     h, w, c = image.shape
@@ -439,8 +470,8 @@ class RowAnalyzer:
                     hip_px = (int(hip[0] * w), int(hip[1] * h))
                     
                     # Convert back marker coordinates to pixel values
-                    left_shoulder_px = (int(left_shoulder_back[0] * w), int(left_shoulder_back[1] * h))
-                    right_shoulder_px = (int(right_shoulder_back[0] * w), int(right_shoulder_back[1] * h))
+                    shoulder_back_px = (int(shoulder_back[0] * w), int(shoulder_back[1] * h))
+                    opposite_shoulder_px = (int(opposite_shoulder_back[0] * w), int(opposite_shoulder_back[1] * h))
                     
                     # Convert chest coordinates to pixel values
                     chest_px = (int(chest[0] * w), int(chest[1] * h))
@@ -459,7 +490,7 @@ class RowAnalyzer:
                     cv2.line(image, elbow_px, wrist_px, (255, 255, 0), 3)
                     
                     # Draw back line
-                    cv2.line(image, left_shoulder_px, right_shoulder_px, (255, 0, 255), 3)  # Magenta for back line
+                    cv2.line(image, shoulder_back_px, opposite_shoulder_px, (255, 0, 255), 3)  # Magenta for back line
                     
                     # Draw spine landmarks
                     spine_colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255)]  # Blue, Green, Red for different spine levels
@@ -480,8 +511,8 @@ class RowAnalyzer:
                     cv2.circle(image, chest_px, 10, (255, 165, 0), -1)  # Orange for chest
                     
                     # Highlight back markers
-                    cv2.circle(image, left_shoulder_px, 8, (0, 255, 0), -1)   # Green for left shoulder
-                    cv2.circle(image, right_shoulder_px, 8, (0, 255, 0), -1)  # Green for right shoulder
+                    cv2.circle(image, shoulder_back_px, 8, (0, 255, 0), -1)   # Green for primary shoulder
+                    cv2.circle(image, opposite_shoulder_px, 8, (0, 255, 0), -1)  # Green for opposite shoulder
                     
                     cv2.putText(image, f"Elbow: {int(elbow_angle)}", 
                                (elbow_px[0]-50, elbow_px[1]+50),
@@ -605,9 +636,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Process video with row form analysis including back markers.')
     parser.add_argument('--input', type=str, default="/Users/kevinrooster/Downloads/row.mov", help='Input video path')
     parser.add_argument('--output', type=str, default="analyzed_row", help='Output video path')
+    parser.add_argument('--side', type=str, default='left', choices=['left', 'right'], help='Which side to analyze (left or right)')
     parser.add_argument('--preview', action='store_true', help='Enable preview window')
     parser.add_argument('--no-compress', action='store_true', help='Disable compression')
     args = parser.parse_args()
 
-    analyzer = RowAnalyzer()
+    analyzer = RowAnalyzer(side=args.side)
     analyzer.process_video(args.input, args.output, preview=args.preview, compress=not args.no_compress) 

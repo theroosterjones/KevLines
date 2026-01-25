@@ -14,28 +14,49 @@ except ImportError:
 import argparse
 
 class HackSquatAnalyzer:
-    def __init__(self):
+    def __init__(self, side='left'):
+        """
+        Initialize Hack Squat Analyzer
+        Args:
+            side: 'left' or 'right' - which side of the body to analyze (default: 'left')
+        """
+        self.side = side.lower()
+        if self.side not in ['left', 'right']:
+            raise ValueError("side must be 'left' or 'right'")
+        
         self.mp_drawing = mp.solutions.drawing_utils
         self.mp_pose = mp.solutions.pose
         
         # Customize drawing style
         self.drawing_spec = self.mp_drawing.DrawingSpec(thickness=2, circle_radius=2)
         
-        # Define which landmarks to show (left side for hack squat analysis)
+        # Select landmarks based on side
+        if self.side == 'left':
+            self.ankle_landmark = self.mp_pose.PoseLandmark.LEFT_ANKLE
+            self.knee_landmark = self.mp_pose.PoseLandmark.LEFT_KNEE
+            self.hip_landmark = self.mp_pose.PoseLandmark.LEFT_HIP
+            self.shoulder_landmark = self.mp_pose.PoseLandmark.LEFT_SHOULDER
+        else:  # right
+            self.ankle_landmark = self.mp_pose.PoseLandmark.RIGHT_ANKLE
+            self.knee_landmark = self.mp_pose.PoseLandmark.RIGHT_KNEE
+            self.hip_landmark = self.mp_pose.PoseLandmark.RIGHT_HIP
+            self.shoulder_landmark = self.mp_pose.PoseLandmark.RIGHT_SHOULDER
+        
+        # Define which landmarks to show (NOSE is center, not side-specific)
         self.landmark_list = [
-            self.mp_pose.PoseLandmark.LEFT_ANKLE,
-            self.mp_pose.PoseLandmark.LEFT_KNEE,
-            self.mp_pose.PoseLandmark.LEFT_HIP,
+            self.ankle_landmark,
+            self.knee_landmark,
+            self.hip_landmark,
             self.mp_pose.PoseLandmark.NOSE,  # For spine alignment reference
-            self.mp_pose.PoseLandmark.LEFT_SHOULDER  # For spine alignment
+            self.shoulder_landmark  # For spine alignment
         ]
         
         # Define connections between landmarks for hack squat analysis
         self.custom_connections = frozenset([
-            (self.mp_pose.PoseLandmark.LEFT_ANKLE, self.mp_pose.PoseLandmark.LEFT_KNEE),
-            (self.mp_pose.PoseLandmark.LEFT_KNEE, self.mp_pose.PoseLandmark.LEFT_HIP),
-            (self.mp_pose.PoseLandmark.LEFT_HIP, self.mp_pose.PoseLandmark.LEFT_SHOULDER),
-            (self.mp_pose.PoseLandmark.LEFT_SHOULDER, self.mp_pose.PoseLandmark.NOSE)
+            (self.ankle_landmark, self.knee_landmark),
+            (self.knee_landmark, self.hip_landmark),
+            (self.hip_landmark, self.shoulder_landmark),
+            (self.shoulder_landmark, self.mp_pose.PoseLandmark.NOSE)
         ])
         
         self.pose = self.mp_pose.Pose(
@@ -318,15 +339,15 @@ class HackSquatAnalyzer:
                 try:
                     landmarks = results.pose_landmarks.landmark
                     
-                    # Get coordinates for hack squat analysis
-                    ankle = [landmarks[self.mp_pose.PoseLandmark.LEFT_ANKLE.value].x,
-                            landmarks[self.mp_pose.PoseLandmark.LEFT_ANKLE.value].y]
-                    knee = [landmarks[self.mp_pose.PoseLandmark.LEFT_KNEE.value].x,
-                           landmarks[self.mp_pose.PoseLandmark.LEFT_KNEE.value].y]
-                    hip = [landmarks[self.mp_pose.PoseLandmark.LEFT_HIP.value].x,
-                          landmarks[self.mp_pose.PoseLandmark.LEFT_HIP.value].y]
-                    shoulder = [landmarks[self.mp_pose.PoseLandmark.LEFT_SHOULDER.value].x,
-                              landmarks[self.mp_pose.PoseLandmark.LEFT_SHOULDER.value].y]
+                    # Get coordinates for hack squat analysis (using selected side)
+                    ankle = [landmarks[self.ankle_landmark.value].x,
+                            landmarks[self.ankle_landmark.value].y]
+                    knee = [landmarks[self.knee_landmark.value].x,
+                           landmarks[self.knee_landmark.value].y]
+                    hip = [landmarks[self.hip_landmark.value].x,
+                          landmarks[self.hip_landmark.value].y]
+                    shoulder = [landmarks[self.shoulder_landmark.value].x,
+                              landmarks[self.shoulder_landmark.value].y]
                     nose = [landmarks[self.mp_pose.PoseLandmark.NOSE.value].x,
                            landmarks[self.mp_pose.PoseLandmark.NOSE.value].y]
                     
@@ -430,9 +451,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Process video with hack squat form analysis.')
     parser.add_argument('--input', type=str, default="/Users/kevinrooster/Downloads/hacksquat.mov", help='Input video path')
     parser.add_argument('--output', type=str, default="analyzed_hacksquat", help='Output video path')
+    parser.add_argument('--side', type=str, default='left', choices=['left', 'right'], help='Which side to analyze (left or right)')
     parser.add_argument('--preview', action='store_true', help='Enable preview window')
     parser.add_argument('--no-compress', action='store_true', help='Disable compression')
     args = parser.parse_args()
 
-    analyzer = HackSquatAnalyzer()
+    analyzer = HackSquatAnalyzer(side=args.side)
     analyzer.process_video(args.input, args.output, preview=args.preview, compress=not args.no_compress) 
