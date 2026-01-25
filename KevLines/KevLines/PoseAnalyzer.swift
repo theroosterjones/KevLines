@@ -22,6 +22,7 @@ enum ExerciseType: String, CaseIterable {
     case squat = "Squat"
     case row = "Row"
     case hacksquat = "Hack Squat"
+    case backsquat = "Back Squat"
 }
 
 class PoseAnalyzer: ObservableObject {

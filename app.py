@@ -14,6 +14,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from hacksquat_analyzer import HackSquatAnalyzer
 from row_analyzer import RowAnalyzer
 from pose_analyzer import PoseAnalyzer
+from backsquat_analyzer import BackSquatAnalyzer
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for iOS app requests
@@ -142,7 +143,7 @@ def api_status():
     return jsonify({
         'status': 'online',
         'version': '1.0.0',
-        'supported_exercises': ['squat', 'hacksquat', 'row', 'lat_pulldown'],
+        'supported_exercises': ['squat', 'hacksquat', 'row', 'lat_pulldown', 'backsquat'],
         'timestamp': datetime.now().isoformat()
     })
 
@@ -194,17 +195,45 @@ def analyze_video():
         elif exercise_type == 'hacksquat':
             hacksquat_analyzer = HackSquatAnalyzer()
             hacksquat_analyzer.process_video(filepath, output_path, preview=False, compress=True)
-            results = {'message': 'Hack squat analysis completed', 'output_file': output_filename}
+            results = {
+                'message': 'Hack squat analysis completed', 
+                'output_file': output_filename,
+                'rep_count': 0,  # TODO: Implement rep counting for hack squat
+                'form_score': 85,  # TODO: Implement form scoring for hack squat
+                'feedback': ['Hack squat analysis completed successfully']
+            }
         elif exercise_type == 'row':
             row_analyzer = RowAnalyzer()
             row_analyzer.process_video(filepath, output_path, preview=False, compress=True)
-            results = {'message': 'Row analysis completed', 'output_file': output_filename}
+            results = {
+                'message': 'Row analysis completed', 
+                'output_file': output_filename,
+                'rep_count': 0,  # TODO: Implement rep counting for row
+                'form_score': 85,  # TODO: Implement form scoring for row
+                'feedback': ['Row analysis completed successfully']
+            }
         elif exercise_type == 'lat_pulldown':
             pose_analyzer = PoseAnalyzer()
             pose_analyzer.process_video(filepath, output_path, preview=False, compress=True)
-            results = {'message': 'Lat pulldown analysis completed', 'output_file': output_filename}
+            results = {
+                'message': 'Lat pulldown analysis completed', 
+                'output_file': output_filename,
+                'rep_count': 0,  # TODO: Implement rep counting for lat pulldown
+                'form_score': 85,  # TODO: Implement form scoring for lat pulldown
+                'feedback': ['Lat pulldown analysis completed successfully']
+            }
+        elif exercise_type == 'backsquat':
+            backsquat_analyzer = BackSquatAnalyzer()
+            backsquat_analyzer.process_video(filepath, output_path, preview=False, compress=True)
+            results = {
+                'message': 'Back squat analysis completed', 
+                'output_file': output_filename,
+                'rep_count': 0,  # TODO: Implement rep counting for back squat
+                'form_score': 85,  # TODO: Implement form scoring for back squat
+                'feedback': ['Back squat analysis completed successfully']
+            }
         else:
-            return jsonify({'error': 'Unsupported exercise type. Supported types: squat, hacksquat, row, lat_pulldown'}), 400
+            return jsonify({'error': 'Unsupported exercise type. Supported types: squat, hacksquat, row, lat_pulldown, backsquat'}), 400
         
         return jsonify({
             'success': True,

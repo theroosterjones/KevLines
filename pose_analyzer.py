@@ -227,9 +227,11 @@ class PoseAnalyzer:
             height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
             fps = int(cap.get(cv2.CAP_PROP_FPS))
             
-            # Create output path in same directory as script
+            # Create output path in outputs directory
             script_dir = os.path.dirname(os.path.abspath(__file__))
-            output_path = os.path.join(script_dir, output_path)
+            outputs_dir = os.path.join(script_dir, 'outputs')
+            os.makedirs(outputs_dir, exist_ok=True)  # Create outputs directory if it doesn't exist
+            output_path = os.path.join(outputs_dir, output_path)
             print(f"\nAttempting to save video to: {output_path}")
             
             # Try different codecs

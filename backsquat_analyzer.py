@@ -13,7 +13,7 @@ except ImportError:
     print("Warning: MoviePy not available. Video compression will be disabled.")
 import argparse
 
-class RowAnalyzer:
+class BackSquatAnalyzer:
     def __init__(self):
         self.mp_drawing = mp.solutions.drawing_utils
         self.mp_pose = mp.solutions.pose
@@ -21,21 +21,13 @@ class RowAnalyzer:
         # Customize drawing style
         self.drawing_spec = self.mp_drawing.DrawingSpec(thickness=2, circle_radius=2)
         
-        # Define which landmarks to show (left side only)
+        # Define which landmarks to show (left side for back squat analysis)
         self.landmark_list = [
-            self.mp_pose.PoseLandmark.LEFT_SHOULDER,
-            self.mp_pose.PoseLandmark.LEFT_ELBOW,
-            self.mp_pose.PoseLandmark.LEFT_WRIST,
+            self.mp_pose.PoseLandmark.LEFT_ANKLE,
+            self.mp_pose.PoseLandmark.LEFT_KNEE,
             self.mp_pose.PoseLandmark.LEFT_HIP,
-            self.mp_pose.PoseLandmark.RIGHT_SHOULDER,  # For back line
-            self.mp_pose.PoseLandmark.LEFT_EAR,  # For back alignment
-            self.mp_pose.PoseLandmark.RIGHT_EAR  # For back alignment
+            self.mp_pose.PoseLandmark.LEFT_SHOULDER  # For spine line
         ]
-        
-        # Define connections between landmarks (white skeleton lines, left side only)
-        self.custom_connections = frozenset([
-            (self.mp_pose.PoseLandmark.LEFT_SHOULDER, self.mp_pose.PoseLandmark.RIGHT_SHOULDER)  # Back line
-        ])
         
         self.pose = self.mp_pose.Pose(
             min_detection_confidence=0.5,
@@ -47,48 +39,6 @@ class RowAnalyzer:
         
         # Initialize smoothed landmark positions (stored as [x, y] coordinates)
         self.smoothed_landmarks = {}
-
-    def calculate_spine_landmarks(self, left_shoulder, right_shoulder, hip):
-        """
-        Calculate estimated spine landmarks based on shoulder positions.
-        Args:
-            left_shoulder: left shoulder coordinates [x, y]
-            right_shoulder: right shoulder coordinates [x, y]
-            hip: hip coordinates [x, y]
-        Returns:
-            spine_landmarks: list of estimated spine points [x, y]
-        """
-        # Calculate midpoint between shoulders
-        shoulder_midpoint = [(left_shoulder[0] + right_shoulder[0]) / 2,
-                           (left_shoulder[1] + right_shoulder[1]) / 2]
-        
-        # Calculate spine direction (from shoulders to hip)
-        spine_direction = [hip[0] - shoulder_midpoint[0], hip[1] - shoulder_midpoint[1]]
-        spine_length = np.sqrt(spine_direction[0]**2 + spine_direction[1]**2)
-        
-        # Normalize direction
-        if spine_length > 0:
-            spine_direction = [spine_direction[0] / spine_length, spine_direction[1] / spine_length]
-        
-        # Create spine landmarks at different heights
-        spine_landmarks = []
-        
-        # Upper spine (near shoulders)
-        upper_spine = [shoulder_midpoint[0] + spine_direction[0] * spine_length * 0.1,
-                      shoulder_midpoint[1] + spine_direction[1] * spine_length * 0.1]
-        spine_landmarks.append(upper_spine)
-        
-        # Mid spine
-        mid_spine = [shoulder_midpoint[0] + spine_direction[0] * spine_length * 0.5,
-                    shoulder_midpoint[1] + spine_direction[1] * spine_length * 0.5]
-        spine_landmarks.append(mid_spine)
-        
-        # Lower spine (near hip)
-        lower_spine = [shoulder_midpoint[0] + spine_direction[0] * spine_length * 0.9,
-                      shoulder_midpoint[1] + spine_direction[1] * spine_length * 0.9]
-        spine_landmarks.append(lower_spine)
-        
-        return spine_landmarks
 
     def calculate_angle(self, a, b, c):
         """
@@ -296,7 +246,7 @@ class RowAnalyzer:
     def process_video(self, input_path, output_path, preview=False, compress=True):
         # Store input path for color space preservation
         self.input_path = input_path
-        self.original_input_path = input_path  # Keep reference to original
+        self.original_input_path = input_path
         try:
             cap = cv2.VideoCapture(input_path)
             if not cap.isOpened():
@@ -395,59 +345,43 @@ class RowAnalyzer:
                 try:
                     landmarks = results.pose_landmarks.landmark
                     
-                    # Get raw coordinates
-                    raw_shoulder = [landmarks[self.mp_pose.PoseLandmark.LEFT_SHOULDER.value].x,
-                                   landmarks[self.mp_pose.PoseLandmark.LEFT_SHOULDER.value].y]
-                    raw_elbow = [landmarks[self.mp_pose.PoseLandmark.LEFT_ELBOW.value].x,
-                                 landmarks[self.mp_pose.PoseLandmark.LEFT_ELBOW.value].y]
-                    raw_wrist = [landmarks[self.mp_pose.PoseLandmark.LEFT_WRIST.value].x,
-                                landmarks[self.mp_pose.PoseLandmark.LEFT_WRIST.value].y]
+                    # Get raw coordinates for back squat analysis
+                    raw_ankle = [landmarks[self.mp_pose.PoseLandmark.LEFT_ANKLE.value].x,
+                                landmarks[self.mp_pose.PoseLandmark.LEFT_ANKLE.value].y]
+                    raw_knee = [landmarks[self.mp_pose.PoseLandmark.LEFT_KNEE.value].x,
+                               landmarks[self.mp_pose.PoseLandmark.LEFT_KNEE.value].y]
                     raw_hip = [landmarks[self.mp_pose.PoseLandmark.LEFT_HIP.value].x,
                               landmarks[self.mp_pose.PoseLandmark.LEFT_HIP.value].y]
-                    raw_right_shoulder = [landmarks[self.mp_pose.PoseLandmark.RIGHT_SHOULDER.value].x,
-                                         landmarks[self.mp_pose.PoseLandmark.RIGHT_SHOULDER.value].y]
+                    raw_shoulder = [landmarks[self.mp_pose.PoseLandmark.LEFT_SHOULDER.value].x,
+                                   landmarks[self.mp_pose.PoseLandmark.LEFT_SHOULDER.value].y]
                     
                     # Apply smoothing to all landmarks
-                    shoulder = self.smooth_landmark('left_shoulder', raw_shoulder)
-                    elbow = self.smooth_landmark('left_elbow', raw_elbow)
-                    wrist = self.smooth_landmark('left_wrist', raw_wrist)
+                    ankle = self.smooth_landmark('left_ankle', raw_ankle)
+                    knee = self.smooth_landmark('left_knee', raw_knee)
                     hip = self.smooth_landmark('left_hip', raw_hip)
-                    right_shoulder_back = self.smooth_landmark('right_shoulder', raw_right_shoulder)
+                    shoulder = self.smooth_landmark('left_shoulder', raw_shoulder)
                     
-                    # Left shoulder for back line is same as shoulder
-                    left_shoulder_back = shoulder
-                    
-                    # Calculate chest position (midpoint between shoulders)
-                    raw_chest = [(raw_shoulder[0] + raw_right_shoulder[0]) / 2,
-                                (raw_shoulder[1] + raw_right_shoulder[1]) / 2]
-                    chest = self.smooth_landmark('chest', raw_chest)
-                    
-                    # Calculate angles
-                    elbow_angle = self.calculate_angle(shoulder, elbow, wrist)
-                    shoulder_angle = self.calculate_angle(hip, shoulder, elbow)
-                    
-                    # Calculate spine landmarks
-                    spine_landmarks = self.calculate_spine_landmarks(left_shoulder_back, right_shoulder_back, hip)
+                    # Calculate angles for back squat form
+                    knee_angle = self.calculate_angle(ankle, knee, hip)
+                    hip_angle = self.calculate_angle(knee, hip, shoulder)
                     
                     # Visualize
                     h, w, c = image.shape
                     
                     # Convert coordinates to pixel values
-                    shoulder_px = (int(shoulder[0] * w), int(shoulder[1] * h))
-                    elbow_px = (int(elbow[0] * w), int(elbow[1] * h))
-                    wrist_px = (int(wrist[0] * w), int(wrist[1] * h))
+                    ankle_px = (int(ankle[0] * w), int(ankle[1] * h))
+                    knee_px = (int(knee[0] * w), int(knee[1] * h))
                     hip_px = (int(hip[0] * w), int(hip[1] * h))
+                    shoulder_px = (int(shoulder[0] * w), int(shoulder[1] * h))
                     
-                    # Convert back marker coordinates to pixel values
-                    left_shoulder_px = (int(left_shoulder_back[0] * w), int(left_shoulder_back[1] * h))
-                    right_shoulder_px = (int(right_shoulder_back[0] * w), int(right_shoulder_back[1] * h))
+                    # Draw extended lines first (background)
+                    # Extended spine line (hip to shoulder)
+                    extended_spine_points = self.extend_line_to_frame(hip_px, shoulder_px, w, h)
+                    cv2.line(image, extended_spine_points[0], extended_spine_points[1], (0, 255, 255), 2)
                     
-                    # Convert chest coordinates to pixel values
-                    chest_px = (int(chest[0] * w), int(chest[1] * h))
-                    
-                    # Draw extended line first (background)
-                    extended_line_points = self.extend_line_to_frame(wrist_px, elbow_px, w, h)
-                    cv2.line(image, extended_line_points[0], extended_line_points[1], (0, 255, 255), 2)
+                    # Extended leg line (knee to hip)
+                    extended_leg_points = self.extend_line_to_frame(knee_px, hip_px, w, h)
+                    cv2.line(image, extended_leg_points[0], extended_leg_points[1], (0, 255, 255), 2)
                     
                     # Draw skeleton and angles
                     for landmark in self.landmark_list:
@@ -455,43 +389,24 @@ class RowAnalyzer:
                         y = int(landmarks[landmark.value].y * h)
                         cv2.circle(image, (x, y), 5, (255, 255, 255), -1)
                     
-                    cv2.line(image, shoulder_px, elbow_px, (255, 255, 0), 3)
-                    cv2.line(image, elbow_px, wrist_px, (255, 255, 0), 3)
+                    # Draw connections for back squat analysis
+                    cv2.line(image, ankle_px, knee_px, (0, 255, 0), 3)  # Lower leg (green)
+                    cv2.line(image, knee_px, hip_px, (0, 255, 0), 3)   # Upper leg (green)
+                    cv2.line(image, hip_px, shoulder_px, (255, 0, 0), 3)  # Spine (red)
                     
-                    # Draw back line
-                    cv2.line(image, left_shoulder_px, right_shoulder_px, (255, 0, 255), 3)  # Magenta for back line
+                    # Highlight key joints
+                    cv2.circle(image, knee_px, 12, (0, 0, 255), -1)      # Knee (red)
+                    cv2.circle(image, hip_px, 12, (0, 0, 255), -1)       # Hip (red)
+                    cv2.circle(image, ankle_px, 10, (255, 255, 0), -1)   # Ankle (yellow)
+                    cv2.circle(image, shoulder_px, 10, (255, 255, 0), -1) # Shoulder (yellow)
                     
-                    # Draw spine landmarks
-                    spine_colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255)]  # Blue, Green, Red for different spine levels
-                    for i, spine_point in enumerate(spine_landmarks):
-                        spine_px = (int(spine_point[0] * w), int(spine_point[1] * h))
-                        cv2.circle(image, spine_px, 6, spine_colors[i], -1)
-                    
-                    # Connect spine landmarks
-                    for i in range(len(spine_landmarks) - 1):
-                        spine1_px = (int(spine_landmarks[i][0] * w), int(spine_landmarks[i][1] * h))
-                        spine2_px = (int(spine_landmarks[i+1][0] * w), int(spine_landmarks[i+1][1] * h))
-                        cv2.line(image, spine1_px, spine2_px, (0, 255, 255), 2)  # Yellow spine line
-                    
-                    cv2.circle(image, elbow_px, 10, (0, 0, 255), -1)
-                    cv2.circle(image, shoulder_px, 10, (0, 0, 255), -1)
-                    
-                    # Highlight chest landmark
-                    cv2.circle(image, chest_px, 10, (255, 165, 0), -1)  # Orange for chest
-                    
-                    # Highlight back markers
-                    cv2.circle(image, left_shoulder_px, 8, (0, 255, 0), -1)   # Green for left shoulder
-                    cv2.circle(image, right_shoulder_px, 8, (0, 255, 0), -1)  # Green for right shoulder
-                    
-                    cv2.putText(image, f"Elbow: {int(elbow_angle)}", 
-                               (elbow_px[0]-50, elbow_px[1]+50),
-                               cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
-                    cv2.putText(image, f"Shoulder: {int(shoulder_angle)}", 
-                               (shoulder_px[0]-50, shoulder_px[1]-30),
-                               cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
-                    cv2.putText(image, "Chest", 
-                               (chest_px[0]-30, chest_px[1]-20),
-                               cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+                    # Display angles
+                    cv2.putText(image, f"Knee: {int(knee_angle)}", 
+                               (knee_px[0]-50, knee_px[1]+50),
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+                    cv2.putText(image, f"Hip: {int(hip_angle)}", 
+                               (hip_px[0]-50, hip_px[1]-30),
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
                     
                 except Exception as e:
                     print(f"\nFrame {frame_count} processing error: {e}")
@@ -509,7 +424,7 @@ class RowAnalyzer:
                 
                 # Show preview if enabled
                 if preview:
-                    cv2.imshow('Preview', image)
+                    cv2.imshow('Back Squat Analysis Preview', image)
                     if cv2.waitKey(1) & 0xFF == ord('q'):
                         print("\nProcessing interrupted by user")
                         break
@@ -602,12 +517,12 @@ class RowAnalyzer:
             sys.exit(1)
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Process video with row form analysis including back markers.')
-    parser.add_argument('--input', type=str, default="/Users/kevinrooster/Downloads/row.mov", help='Input video path')
-    parser.add_argument('--output', type=str, default="analyzed_row", help='Output video path')
+    parser = argparse.ArgumentParser(description='Process video with barbell back squat form analysis.')
+    parser.add_argument('--input', type=str, default="/Users/kevinrooster/Downloads/backsquat.mov", help='Input video path')
+    parser.add_argument('--output', type=str, default="analyzed_backsquat", help='Output video path')
     parser.add_argument('--preview', action='store_true', help='Enable preview window')
     parser.add_argument('--no-compress', action='store_true', help='Disable compression')
     args = parser.parse_args()
 
-    analyzer = RowAnalyzer()
-    analyzer.process_video(args.input, args.output, preview=args.preview, compress=not args.no_compress) 
+    analyzer = BackSquatAnalyzer()
+    analyzer.process_video(args.input, args.output, preview=args.preview, compress=not args.no_compress)

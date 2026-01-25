@@ -18,7 +18,7 @@ struct UploadResponse: Codable {
 
 struct AnalysisResponse: Codable {
     let success: Bool
-    let results: AnalysisResults
+    let results: AnalysisResults?
     let output_file: String
 }
 
@@ -42,7 +42,7 @@ class APIService: ObservableObject {
     static let shared = APIService()
     
     // Configuration
-    private let baseURL = "http://192.168.1.116:3000"  // Your computer's IP address for iPhone testing
+    private let baseURL = "http://10.0.10.231:3000"  // Your computer's IP address for iPhone testing
     private let session = URLSession.shared
     
     private init() {}
@@ -176,7 +176,18 @@ class APIService: ObservableObject {
         
         body.append("--\(boundary)\r\n".data(using: .utf8)!)
         body.append("Content-Disposition: form-data; name=\"file\"; filename=\"\(filename)\"\r\n".data(using: .utf8)!)
-        body.append("Content-Type: video/mp4\r\n\r\n".data(using: .utf8)!)
+        
+        // Determine correct content type based on file extension
+        let contentType: String
+        if filename.lowercased().hasSuffix(".mov") {
+            contentType = "video/quicktime"
+        } else if filename.lowercased().hasSuffix(".mp4") {
+            contentType = "video/mp4"
+        } else {
+            contentType = "video/mp4" // Default fallback
+        }
+        
+        body.append("Content-Type: \(contentType)\r\n\r\n".data(using: .utf8)!)
         body.append(videoData)
         body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
         
@@ -223,6 +234,8 @@ extension ExerciseType {
             return "row"
         case .hacksquat:
             return "hacksquat"
+        case .backsquat:
+            return "backsquat"
         }
     }
 }

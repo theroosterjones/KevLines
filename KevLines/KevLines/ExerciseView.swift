@@ -154,20 +154,7 @@ struct ExerciseView: View {
                                         .cornerRadius(12)
                                     }
                                     
-                                    Button(action: {
-                                        simulateVideoSelection()
-                                    }) {
-                                        HStack {
-                                            Image(systemName: "doc.on.doc")
-                                            Text("Load Test Video")
-                                        }
-                                        .font(.headline)
-                                        .foregroundColor(.white)
-                                        .padding()
-                                        .frame(maxWidth: .infinity)
-                                        .background(Color.green)
-                                        .cornerRadius(12)
-                                    }
+                                    // Removed test video button to force real backend usage
                                 }
                             }
                             .padding()
@@ -200,10 +187,11 @@ struct ExerciseView: View {
             }
                     .onAppear {
             print("🚀 ExerciseView appeared!")
+            // Request local network permission
+            requestLocalNetworkPermission()
             // Check backend status
             checkBackendStatus()
-            // Auto-load test video for simulator testing
-            simulateVideoSelection()
+            // Note: Removed auto-loading test video to use real backend workflow
         }
         .alert("Error", isPresented: $showingError) {
             Button("OK") { }
@@ -314,15 +302,21 @@ struct ExerciseView: View {
             do {
                 // Step 1: Upload video to backend
                 print("📤 Uploading video to backend...")
+                print("📤 Video URL: \(videoURL)")
+                print("📤 Video file size: \(try? FileManager.default.attributesOfItem(atPath: videoURL.path)[.size] ?? "unknown") bytes")
+                
                 let uploadResponse = try await apiService.uploadVideo(videoURL)
                 uploadedFilename = uploadResponse.filename
+                print("✅ Upload successful. Filename: \(uploadResponse.filename)")
                 
                 // Step 2: Analyze video
                 print("🔍 Analyzing video with backend...")
+                print("🔍 Exercise type: \(selectedExercise.apiString)")
                 let analysisResponse = try await apiService.analyzeVideo(
                     filename: uploadResponse.filename,
                     exerciseType: selectedExercise.apiString
                 )
+                print("✅ Analysis response received: \(analysisResponse)")
                 
                 // Step 3: Download analyzed video
                 print("📥 Downloading analyzed video...")
@@ -333,8 +327,20 @@ struct ExerciseView: View {
                 await MainActor.run {
                     // Update pose analyzer with real results
                     poseAnalyzer.setExerciseType(selectedExercise)
-                    poseAnalyzer.repCount = analysisResponse.results.rep_count ?? 0
-                    poseAnalyzer.formScore = Float(analysisResponse.results.form_score ?? 85)
+                    
+                    // Handle different response structures from different analyzers
+                    if let results = analysisResponse.results {
+                        poseAnalyzer.repCount = results.rep_count ?? 0
+                        poseAnalyzer.formScore = Float(results.form_score ?? 85)
+                        if let feedback = results.feedback {
+                            poseAnalyzer.feedback = feedback
+                        }
+                    } else {
+                        // For analyzers that don't return detailed results, use defaults
+                        poseAnalyzer.repCount = 0
+                        poseAnalyzer.formScore = 85.0
+                        poseAnalyzer.feedback = ["Analysis completed successfully"]
+                    }
                     
                     isAnalyzing = false
                     showingWorkoutSummary = true
@@ -410,6 +416,25 @@ struct ExerciseView: View {
                 print("❌ Error saving video to Photos: \(error.localizedDescription)")
                 await MainActor.run {
                     errorMessage = "Failed to save video to Photos: \(error.localizedDescription)"
+                    showingError = true
+                }
+            }
+        }
+    }
+    
+    // MARK: - Network Permission Functions
+    private func requestLocalNetworkPermission() {
+        print("🌐 Requesting local network permission...")
+        
+        // Make a test request to trigger local network permission dialog
+        Task {
+            do {
+                let _ = try await apiService.checkBackendStatus()
+                print("✅ Local network permission granted")
+            } catch {
+                print("⚠️ Local network permission needed: \(error.localizedDescription)")
+                await MainActor.run {
+                    errorMessage = "Please enable Local Network access for KevLines in Settings → Privacy & Security → Local Network"
                     showingError = true
                 }
             }
