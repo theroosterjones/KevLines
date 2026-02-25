@@ -167,6 +167,13 @@ class PoseAnalyzer: ObservableObject {
                         "Knees tracking properly over toes",
                         "Consider adding more depth to your squats"
                     ]
+                case .backsquat:
+                    self.feedback = [
+                        "Good depth on back squats",
+                        "Keep chest up and spine neutral",
+                        "Knees tracking over toes",
+                        "Consider bracing core at the bottom"
+                    ]
                 }
                 
                 self.isAnalyzing = false
@@ -198,6 +205,8 @@ class PoseAnalyzer: ObservableObject {
             analyzeRow(keypoints: keypoints)
         case .hacksquat:
             analyzeHackSquat(keypoints: keypoints)
+        case .backsquat:
+            analyzeBackSquat(keypoints: keypoints)
         }
         
         // Update current analysis
@@ -337,6 +346,33 @@ class PoseAnalyzer: ObservableObject {
                 repStartTime = now
                 formScore = min(100, formScore + 2)
                 feedback = ["Powerful hack squat! \(repCount) completed"]
+            }
+        }
+    }
+    
+    private func analyzeBackSquat(keypoints: [PoseKeypoint]) {
+        // Back squat analysis (similar to hack squat)
+        let now = Date()
+        
+        switch exerciseState {
+        case .ready:
+            exerciseState = .down
+            repStartTime = now
+            feedback = ["Starting back squat..."]
+            
+        case .down:
+            if now.timeIntervalSince(repStartTime ?? now) > 1.5 {
+                exerciseState = .up
+                feedback = ["Drive up!"]
+            }
+            
+        case .up:
+            if now.timeIntervalSince(repStartTime ?? now) > 3.0 {
+                repCount += 1
+                exerciseState = .down
+                repStartTime = now
+                formScore = min(100, formScore + 2)
+                feedback = ["Strong back squat! \(repCount) completed"]
             }
         }
     }

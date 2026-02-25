@@ -1,13 +1,38 @@
 import SwiftUI
 
 struct WorkoutRecord: Identifiable, Codable {
-    let id = UUID()
+    let id: UUID
     let exerciseType: String
     let repCount: Int
     let formScore: Float
     let duration: TimeInterval
     let date: Date
     let notes: String?
+    
+    init(id: UUID = UUID(), exerciseType: String, repCount: Int, formScore: Float, duration: TimeInterval, date: Date, notes: String? = nil) {
+        self.id = id
+        self.exerciseType = exerciseType
+        self.repCount = repCount
+        self.formScore = formScore
+        self.duration = duration
+        self.date = date
+        self.notes = notes
+    }
+    
+    enum CodingKeys: String, CodingKey {
+        case id, exerciseType, repCount, formScore, duration, date, notes
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        exerciseType = try container.decode(String.self, forKey: .exerciseType)
+        repCount = try container.decode(Int.self, forKey: .repCount)
+        formScore = try container.decode(Float.self, forKey: .formScore)
+        duration = try container.decode(TimeInterval.self, forKey: .duration)
+        date = try container.decode(Date.self, forKey: .date)
+        notes = try container.decodeIfPresent(String.self, forKey: .notes)
+    }
 }
 
 struct WorkoutHistoryView: View {

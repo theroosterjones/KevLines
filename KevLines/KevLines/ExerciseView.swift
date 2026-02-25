@@ -20,11 +20,13 @@ struct ExerciseView: View {
     @State private var showingVideoPicker = false
     @State private var uploadedFilename: String?
     @State private var analyzedVideoURL: URL?
+    @State private var lastAnalyzedOutputFilename: String?
     @State private var backendStatus: String = "Checking..."
     @State private var showingError = false
     @State private var errorMessage = ""
     @State private var showingSafetyWarning = true
     @State private var safetyAccepted = false
+    @State private var isSavingToPhotos = false
     
     var body: some View {
         NavigationView {
@@ -119,8 +121,14 @@ struct ExerciseView: View {
                                 // Download analyzed video button
                                 Button(action: downloadAnalyzedVideo) {
                                     HStack {
-                                        Image(systemName: "arrow.down.circle.fill")
-                                        Text("Download Analyzed Video")
+                                        if isSavingToPhotos {
+                                            ProgressView()
+                                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                                .scaleEffect(0.8)
+                                        } else {
+                                            Image(systemName: "arrow.down.circle.fill")
+                                        }
+                                        Text(isSavingToPhotos ? "Saving..." : "Download Analyzed Video")
                                     }
                                     .font(.headline)
                                     .foregroundColor(.white)
@@ -129,6 +137,7 @@ struct ExerciseView: View {
                                     .background(Color.green)
                                     .cornerRadius(12)
                                 }
+                                .disabled(isSavingToPhotos)
                             }
                             
                             // Change video button
@@ -195,7 +204,7 @@ struct ExerciseView: View {
                 )
             }
             .photosPicker(isPresented: $showingVideoPicker, selection: $selectedVideoItem, matching: .videos)
-            .onChange(of: selectedVideoItem) { newValue in
+            .onChange(of: selectedVideoItem) { _, newValue in
                 if let newValue = newValue {
                     loadSelectedVideo(newValue)
                 }
@@ -286,7 +295,8 @@ struct ExerciseView: View {
         if FileManager.default.fileExists(atPath: videoURL.path) {
             selectedVideoURL = videoURL
             print("✅ Found video file: \(videoURL.path)")
-            print("✅ File size: \(try? FileManager.default.attributesOfItem(atPath: videoURL.path)[.size] ?? "unknown") bytes")
+            let sizeStr = (try? FileManager.default.attributesOfItem(atPath: videoURL.path)[.size] as? Int).map { "\($0)" } ?? "unknown"
+            print("✅ File size: \(sizeStr) bytes")
         } else {
             print("❌ Video file not found at: \(videoURL.path)")
             
@@ -318,7 +328,8 @@ struct ExerciseView: View {
                 // Step 1: Upload video to backend
                 print("📤 Uploading video to backend...")
                 print("📤 Video URL: \(videoURL)")
-                print("📤 Video file size: \(try? FileManager.default.attributesOfItem(atPath: videoURL.path)[.size] ?? "unknown") bytes")
+                let sizeStr = (try? FileManager.default.attributesOfItem(atPath: videoURL.path)[.size] as? Int).map { "\($0)" } ?? "unknown"
+                print("📤 Video file size: \(sizeStr) bytes")
                 
                 let uploadResponse = try await apiService.uploadVideo(videoURL)
                 uploadedFilename = uploadResponse.filename
@@ -338,7 +349,10 @@ struct ExerciseView: View {
                 // Step 3: Download analyzed video
                 print("📥 Downloading analyzed video...")
                 let analyzedVideo = try await apiService.downloadAnalyzedVideo(filename: analysisResponse.output_file)
-                analyzedVideoURL = analyzedVideo
+                await MainActor.run {
+                    analyzedVideoURL = analyzedVideo
+                    lastAnalyzedOutputFilename = analysisResponse.output_file
+                }
                 
                 // Update UI on main thread
                 await MainActor.run {
@@ -394,44 +408,87 @@ struct ExerciseView: View {
     }
     
     private func downloadAnalyzedVideo() {
-        guard let analyzedVideoURL = analyzedVideoURL else {
+        guard let outputFilename = lastAnalyzedOutputFilename else {
             errorMessage = "No analyzed video available. Please analyze a video first."
             showingError = true
             return
         }
         
         print("📥 Starting video download process...")
+        isSavingToPhotos = true
         
-        // Save to Photos library
         Task {
             do {
+                // Re-download from server so we have a valid file
+                let downloadedURL = try await apiService.downloadAnalyzedVideo(filename: outputFilename)
+                
+                // Copy to a stable location (Caches) so Photos can read it reliably.
+                // Using temp can cause crashes when Photos reads the file asynchronously.
+                let fileManager = FileManager.default
+                let cachesDir = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first!
+                let ext = downloadedURL.pathExtension.isEmpty ? "mp4" : downloadedURL.pathExtension
+                let stableURL = cachesDir.appendingPathComponent("KevLines_SaveToPhotos.\(ext)", isDirectory: false)
+                if fileManager.fileExists(atPath: stableURL.path) {
+                    try? fileManager.removeItem(at: stableURL)
+                }
+                try fileManager.copyItem(at: downloadedURL, to: stableURL)
+                
+                // Ensure file is readable and has content (avoid invalid asset → crash)
+                guard fileManager.fileExists(atPath: stableURL.path),
+                      let attrs = try? fileManager.attributesOfItem(atPath: stableURL.path),
+                      let size = attrs[.size] as? Int, size > 0 else {
+                    await MainActor.run {
+                        isSavingToPhotos = false
+                        errorMessage = "Downloaded file is missing or empty. Try analyzing again."
+                        showingError = true
+                    }
+                    return
+                }
+                
                 // Request permission to save to Photos library
                 let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
                 
                 guard status == .authorized || status == .limited else {
                     await MainActor.run {
+                        isSavingToPhotos = false
                         errorMessage = "Permission denied to save to Photos library"
                         showingError = true
                     }
                     return
                 }
                 
-                // Save video to Photos library
-                try await PHPhotoLibrary.shared().performChanges {
-                    let creationRequest = PHAssetCreationRequest.forAsset()
-                    creationRequest.addResource(with: .video, fileURL: analyzedVideoURL, options: nil)
+                // Save to Photos. Must run on main thread; completion handler may be on a background thread.
+                let savedURL = stableURL
+                let (success, saveError): (Bool, Error?) = await withCheckedContinuation { continuation in
+                    Task { @MainActor in
+                        PHPhotoLibrary.shared().performChanges {
+                            // Use creation request + addResource; file is in Caches so it stays valid
+                            let creationRequest = PHAssetCreationRequest.forAsset()
+                            creationRequest.addResource(with: .video, fileURL: savedURL, options: nil)
+                        } completionHandler: { success, error in
+                            Task { @MainActor in
+                                continuation.resume(returning: (success, error))
+                            }
+                        }
+                    }
                 }
                 
                 await MainActor.run {
-                    print("📥 Video saved to Photos library successfully!")
-                    // Show success message
-                    errorMessage = "Analyzed video saved to Photos library!"
+                    isSavingToPhotos = false
+                    if success {
+                        print("📥 Video saved to Photos library successfully!")
+                        errorMessage = "Analyzed video saved to Photos library!"
+                    } else {
+                        print("❌ Photos save failed: \(saveError?.localizedDescription ?? "unknown")")
+                        errorMessage = saveError?.localizedDescription ?? "Could not save video to Photos"
+                    }
                     showingError = true
                 }
                 
             } catch {
                 print("❌ Error saving video to Photos: \(error.localizedDescription)")
                 await MainActor.run {
+                    isSavingToPhotos = false
                     errorMessage = "Failed to save video to Photos: \(error.localizedDescription)"
                     showingError = true
                 }
@@ -525,8 +582,10 @@ struct ExercisePickerView: View {
         case .squat:
             return "figure.walk"
         case .row:
-            return "figure.rowing"
+            return "figure.strengthtraining.traditional"  // "figure.rowing" not in SF Symbols set
         case .hacksquat:
+            return "figure.strengthtraining.traditional"
+        case .backsquat:
             return "figure.strengthtraining.traditional"
         }
     }

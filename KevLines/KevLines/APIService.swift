@@ -41,9 +41,15 @@ struct StatusResponse: Codable {
 class APIService: ObservableObject {
     static let shared = APIService()
     
-    // Configuration
-    private let baseURL = "http://10.0.10.231:3000"  // Your computer's IP address for iPhone testing
-    private let session = URLSession.shared
+    // Configuration: use Render HTTPS backend for all environments
+    private let baseURL = "https://kevlines.onrender.com"
+    private let session: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 8
+        config.timeoutIntervalForResource = 20
+        config.waitsForConnectivity = false
+        return URLSession(configuration: config)
+    }()
     
     private init() {}
     
@@ -59,8 +65,14 @@ class APIService: ObservableObject {
         guard let url = URL(string: "\(baseURL)/api/status") else {
             throw APIError.invalidURL
         }
+        print("🌐 Checking backend at: \(url.absoluteString)")
         
-        let (data, response) = try await session.data(from: url)
+        let (data, response): (Data, URLResponse)
+        do {
+            (data, response) = try await session.data(from: url)
+        } catch {
+            throw APIError.networkError(error)
+        }
         
         guard let httpResponse = response as? HTTPURLResponse,
               httpResponse.statusCode == 200 else {
@@ -146,7 +158,8 @@ class APIService: ObservableObject {
     
     // MARK: - Download Analyzed Video
     func downloadAnalyzedVideo(filename: String) async throws -> URL {
-        guard let url = URL(string: "\(baseURL)/download/\(filename)") else {
+        let encodedFilename = filename.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? filename
+        guard let url = URL(string: "\(baseURL)/download/\(encodedFilename)") else {
             throw APIError.invalidURL
         }
         

@@ -396,6 +396,8 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_LSApplicationCategoryType = "";
 				INFOPLIST_KEY_NSCameraUsageDescription = "KevLines needs camera access to analyze your workout form and provide real-time feedback on your exercise technique.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "KevLines connects to your computer on the same Wi‑Fi to analyze workout videos.";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "KevLines saves your analyzed workout videos to Photos so you can review your form later.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -437,6 +439,8 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_LSApplicationCategoryType = "";
 				INFOPLIST_KEY_NSCameraUsageDescription = "KevLines needs camera access to analyze your workout form and provide real-time feedback on your exercise technique.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "KevLines connects to your computer on the same Wi‑Fi to analyze workout videos.";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "KevLines saves your analyzed workout videos to Photos so you can review your form later.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;

@@ -332,7 +332,7 @@ class RowAnalyzer:
             cap = cv2.VideoCapture(input_path)
             if not cap.isOpened():
                 print("Error: Could not open video file")
-                return
+                return 0
             
             # Get video properties
             width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -397,7 +397,7 @@ class RowAnalyzer:
             
             if not out or not out.isOpened():
                 print("Error: Could not create output video file with any codec")
-                return
+                return 0
             
             # Get total frame count
             total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -408,6 +408,10 @@ class RowAnalyzer:
             
             # Reset smoothed landmarks for new video
             self.smoothed_landmarks = {}
+            rep_count = 0
+            row_state = 'extended'  # elbow extended = start; flexed = pull
+            EXTENDED_ANGLE = 150
+            FLEXED_ANGLE = 100
             
             frame_count = 0
             while cap.isOpened():
@@ -456,6 +460,12 @@ class RowAnalyzer:
                     # Calculate angles
                     elbow_angle = self.calculate_angle(shoulder, elbow, wrist)
                     shoulder_angle = self.calculate_angle(hip, shoulder, elbow)
+                    # Rep counting: extended -> flexed -> extended = 1 rep
+                    if row_state == 'extended' and elbow_angle < FLEXED_ANGLE:
+                        row_state = 'flexed'
+                    elif row_state == 'flexed' and elbow_angle > EXTENDED_ANGLE:
+                        rep_count += 1
+                        row_state = 'extended'
                     
                     # Calculate spine landmarks
                     spine_landmarks = self.calculate_spine_landmarks(shoulder_back, opposite_shoulder_back, hip)
@@ -523,7 +533,9 @@ class RowAnalyzer:
                     cv2.putText(image, "Chest", 
                                (chest_px[0]-30, chest_px[1]-20),
                                cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
-                    
+                    cv2.putText(image, f"Reps: {rep_count}", (10, 40),
+                               cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+                
                 except Exception as e:
                     print(f"\nFrame {frame_count} processing error: {e}")
                     # For frames where pose detection fails, write the original frame
@@ -625,8 +637,10 @@ class RowAnalyzer:
                         print(f"\nSuccessfully compressed to MP4: {mp4_path}")
                     else:
                         print("\nFailed to compress to MP4, keeping original AVI file")
+                return rep_count
             else:
                 print("\nError: Output file was not created")
+                return 0
             
         except Exception as e:
             print(f"\nError during video processing: {e}")
