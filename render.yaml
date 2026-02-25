@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: kevlines-backend
+    runtime: python
+    plan: starter
+    autoDeploy: true
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --threads 8 --timeout 300 --graceful-timeout 60 --keep-alive 5
+    healthCheckPath: /api/status
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: FLASK_ENV
+        value: production
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: MAX_CONTENT_LENGTH_MB
+        value: "500"

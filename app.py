@@ -18,9 +18,11 @@ from backsquat_analyzer import BackSquatAnalyzer
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for iOS app requests
-app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024  # 500MB max file size
-app.config['UPLOAD_FOLDER'] = 'uploads'
-app.config['OUTPUT_FOLDER'] = 'outputs'
+max_content_length_mb = int(os.getenv('MAX_CONTENT_LENGTH_MB', '500'))
+storage_root = os.getenv('APP_STORAGE_ROOT', '.')
+app.config['MAX_CONTENT_LENGTH'] = max_content_length_mb * 1024 * 1024
+app.config['UPLOAD_FOLDER'] = os.path.join(storage_root, 'uploads')
+app.config['OUTPUT_FOLDER'] = os.path.join(storage_root, 'outputs')
 
 # Ensure directories exist
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
@@ -65,6 +67,9 @@ class FitnessAnalyzer:
         rep_count = 0
         form_score = 100
         feedback = []
+        squat_state = 'top'  # 'top' = standing, 'bottom' = in the hole
+        BOTTOM_ANGLE = 95
+        TOP_ANGLE = 150
         
         while cap.isOpened():
             ret, frame = cap.read()
@@ -98,6 +103,13 @@ class FitnessAnalyzer:
                 # Calculate angles
                 left_knee_angle = self.calculate_angle(left_hip, left_knee, left_ankle)
                 right_knee_angle = self.calculate_angle(right_hip, right_knee, right_ankle)
+                avg_knee = (left_knee_angle + right_knee_angle) / 2
+                # Rep counting: bottom = knee below 95°, top = knee above 150°
+                if squat_state == 'top' and avg_knee < BOTTOM_ANGLE:
+                    squat_state = 'bottom'
+                elif squat_state == 'bottom' and avg_knee > TOP_ANGLE:
+                    rep_count += 1
+                    squat_state = 'top'
                 
                 # Draw pose landmarks
                 self.mp_drawing.draw_landmarks(
@@ -194,12 +206,14 @@ def analyze_video():
         analyzer = FitnessAnalyzer()
         output_filename = f"analyzed_{exercise_type}_{filename}"
         output_path = os.path.join(app.config['OUTPUT_FOLDER'], output_filename)
+        # Pass only filename so analyzers save to outputs/ (not outputs/outputs/)
+        output_name_for_analyzer = output_filename
         
         if exercise_type == 'squat':
             results = analyzer.analyze_squat(filepath, output_path)
         elif exercise_type == 'hacksquat':
             hacksquat_analyzer = HackSquatAnalyzer(side=side)
-            hacksquat_analyzer.process_video(filepath, output_path, preview=False, compress=True)
+            hacksquat_analyzer.process_video(filepath, output_name_for_analyzer, preview=False, compress=True)
             results = {
                 'message': 'Hack squat analysis completed', 
                 'output_file': output_filename,
@@ -209,17 +223,17 @@ def analyze_video():
             }
         elif exercise_type == 'row':
             row_analyzer = RowAnalyzer(side=side)
-            row_analyzer.process_video(filepath, output_path, preview=False, compress=True)
+            row_rep_count = row_analyzer.process_video(filepath, output_name_for_analyzer, preview=False, compress=True)
             results = {
                 'message': 'Row analysis completed', 
                 'output_file': output_filename,
-                'rep_count': 0,  # TODO: Implement rep counting for row
+                'rep_count': row_rep_count if isinstance(row_rep_count, int) else 0,
                 'form_score': 85,  # TODO: Implement form scoring for row
                 'feedback': ['Row analysis completed successfully']
             }
         elif exercise_type == 'lat_pulldown':
             pose_analyzer = PoseAnalyzer(side=side)
-            pose_analyzer.process_video(filepath, output_path, preview=False, compress=True)
+            pose_analyzer.process_video(filepath, output_name_for_analyzer, preview=False, compress=True)
             results = {
                 'message': 'Lat pulldown analysis completed', 
                 'output_file': output_filename,
@@ -229,7 +243,7 @@ def analyze_video():
             }
         elif exercise_type == 'backsquat':
             backsquat_analyzer = BackSquatAnalyzer(side=side)
-            backsquat_analyzer.process_video(filepath, output_path, preview=False, compress=True)
+            backsquat_analyzer.process_video(filepath, output_name_for_analyzer, preview=False, compress=True)
             results = {
                 'message': 'Back squat analysis completed', 
                 'output_file': output_filename,
@@ -254,6 +268,12 @@ def download_file(filename):
     filepath = os.path.join(app.config['OUTPUT_FOLDER'], filename)
     if os.path.exists(filepath):
         return send_file(filepath, as_attachment=True)
+    # Analyzers often output .mp4 even when upload was .mov; try alternate extension
+    base, ext = os.path.splitext(filename)
+    alt_ext = '.mp4' if ext.lower() == '.mov' else '.mov'
+    alt_path = os.path.join(app.config['OUTPUT_FOLDER'], base + alt_ext)
+    if os.path.exists(alt_path):
+        return send_file(alt_path, as_attachment=True, download_name=filename)
     return jsonify({'error': 'File not found'}), 404
 
 if __name__ == '__main__':
