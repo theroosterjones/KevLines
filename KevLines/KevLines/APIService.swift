@@ -3,7 +3,7 @@ import UIKit
 
 // MARK: - API Models
 struct APIResponse<T: Codable>: Codable {
-    let success: Bool
+    let success: Bool?
     let results: T?
     let error: String?
     let output_file: String?
@@ -45,9 +45,10 @@ class APIService: ObservableObject {
     private let baseURL = "https://kevlines.onrender.com"
     private let session: URLSession = {
         let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 8
-        config.timeoutIntervalForResource = 20
-        config.waitsForConnectivity = false
+        // Video upload + server-side analysis can take minutes on cold starts.
+        config.timeoutIntervalForRequest = 120
+        config.timeoutIntervalForResource = 900
+        config.waitsForConnectivity = true
         return URLSession(configuration: config)
     }()
     
@@ -115,8 +116,7 @@ class APIService: ObservableObject {
             print("✅ Video uploaded successfully: \(uploadResponse.filename)")
             return uploadResponse
         } else {
-            let errorResponse = try JSONDecoder().decode(APIResponse<String>.self, from: data)
-            throw APIError.uploadFailed(errorResponse.error ?? "Unknown error")
+            throw APIError.uploadFailed(extractErrorMessage(from: data) ?? "Unknown error")
         }
     }
     
@@ -129,6 +129,7 @@ class APIService: ObservableObject {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 900
         
         let requestBody = [
             "filename": filename,
@@ -151,8 +152,10 @@ class APIService: ObservableObject {
             print("✅ Video analysis completed: \(analysisResponse.output_file)")
             return analysisResponse
         } else {
-            let errorResponse = try JSONDecoder().decode(APIResponse<String>.self, from: data)
-            throw APIError.analysisFailed(errorResponse.error ?? "Unknown error")
+            if httpResponse.statusCode == 502 {
+                throw APIError.analysisFailed("Backend temporarily unavailable (Render 502). Please retry in 1-2 minutes or redeploy the Render service.")
+            }
+            throw APIError.analysisFailed(extractErrorMessage(from: data) ?? "Unknown error")
         }
     }
     
@@ -206,6 +209,25 @@ class APIService: ObservableObject {
         body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
         
         return body
+    }
+
+    private func extractErrorMessage(from data: Data) -> String? {
+        if let text = String(data: data, encoding: .utf8),
+           text.lowercased().contains("<title>502</title>") {
+            return "Backend temporarily unavailable (Render 502). Please retry in 1-2 minutes."
+        }
+        if let decoded = try? JSONDecoder().decode(APIResponse<String>.self, from: data),
+           let message = decoded.error ?? decoded.message {
+            return message
+        }
+        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            if let error = json["error"] as? String { return error }
+            if let message = json["message"] as? String { return message }
+        }
+        if let text = String(data: data, encoding: .utf8), !text.isEmpty {
+            return text
+        }
+        return nil
     }
 }
 

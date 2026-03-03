@@ -383,7 +383,7 @@ struct ExerciseView: View {
                 print("❌ Analysis failed: \(error.localizedDescription)")
                 await MainActor.run {
                     isAnalyzing = false
-                    errorMessage = error.localizedDescription
+                    errorMessage = userFacingErrorMessage(from: error)
                     showingError = true
                 }
             }
@@ -480,7 +480,7 @@ struct ExerciseView: View {
                         errorMessage = "Analyzed video saved to Photos library!"
                     } else {
                         print("❌ Photos save failed: \(saveError?.localizedDescription ?? "unknown")")
-                        errorMessage = saveError?.localizedDescription ?? "Could not save video to Photos"
+                        errorMessage = userFacingErrorMessage(from: saveError)
                     }
                     showingError = true
                 }
@@ -489,11 +489,28 @@ struct ExerciseView: View {
                 print("❌ Error saving video to Photos: \(error.localizedDescription)")
                 await MainActor.run {
                     isSavingToPhotos = false
-                    errorMessage = "Failed to save video to Photos: \(error.localizedDescription)"
+                    errorMessage = "Failed to save video to Photos: \(userFacingErrorMessage(from: error))"
                     showingError = true
                 }
             }
         }
+    }
+
+    private func userFacingErrorMessage(from error: Error?) -> String {
+        let raw = (error as NSError?)?.localizedDescription ?? "An unexpected error occurred."
+        return userFacingErrorMessage(raw)
+    }
+
+    private func userFacingErrorMessage(_ message: String) -> String {
+        // Collapse giant/blank server payloads into a concise message that won't break layout.
+        var cleaned = message.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression).trimmingCharacters(in: .whitespacesAndNewlines)
+        if cleaned.isEmpty {
+            cleaned = "An unexpected error occurred. Please try again."
+        }
+        if cleaned.count > 220 {
+            cleaned = String(cleaned.prefix(220)) + "..."
+        }
+        return cleaned
     }
     
     // MARK: - Network Permission Functions
