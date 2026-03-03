@@ -1,174 +1,97 @@
-# KevLines - AI-Powered Fitness Form Analysis
+# KevLines 1.x - AI-Powered Fitness Form Analysis (Cloud Architecture)
 
-A comprehensive fitness analysis platform with **Python backend** for sophisticated video analysis and **iOS app** for user interface and video capture.
+> **This project has been superseded by [KevLines 2.0](https://github.com/theroosterjones/KevLines2.0), which moves the entire processing pipeline on-device for dramatically faster performance. This repository is preserved as a reference.**
 
-## 🎯 Current Status & Architecture
+## What KevLines 1.x Does
 
-**KevLines** is transitioning to a **hybrid architecture** that leverages the best of both platforms:
+KevLines is a fitness form analysis platform that records exercise videos and overlays biomechanical feedback (joint angles, skeleton lines, rep counts). It uses a **Python backend** running MediaPipe for pose estimation and an **iOS app** for video capture and playback.
 
-### 🐍 Python Backend (Primary Analysis Engine)
-- **Sophisticated exercise analyzers** with MediaPipe integration
-- **Working analyzers**: Hack Squat, Row, Lat Pulldown (archived: Pushup analyzers)
-- **Advanced pose detection** and form analysis
-- **Video processing** with detailed feedback overlays
-- **Flask web API** for iOS app integration
+### Supported Exercises
+- Hack Squat (knee, hip, spine angles)
+- Barbell Row (elbow, shoulder angles, spine line, rep counting)
+- Back Squat (knee, hip angles, extended reference lines)
+- Lat Pulldown (elbow, shoulder angles, forearm line)
+- Squat (knee angle, rep counting)
 
-### 📱 iOS App (User Interface)
-- **Video capture and upload** to Python backend
-- **Results display** and workout tracking
-- **User-friendly interface** for exercise selection
-- **Download processed videos** with pose analysis overlays
-
-## 🏗️ Current Architecture
+## Architecture (1.x)
 
 ```
-iOS App → Upload Video → Python Backend → Process with MediaPipe → Return Processed Video → iOS App → Save to Device
+iPhone → Upload video (HTTPS) → Render cloud server → MediaPipe + OpenCV → Download analyzed video → iPhone
 ```
 
-### ✅ What's Currently Working
-- **Python analyzers**: Hack squat, row, and lat pulldown analysis with high accuracy
-- **Flask web API**: Video upload, processing, and download endpoints
-- **iOS app foundation**: Basic UI and video handling structure
-- **Video processing pipeline**: Upload → Analyze → Download workflow
+## Known Limitations of 1.x
 
-### 🔄 Current Limitations
-- **iOS app uses simulated analysis** (not connected to Python backend yet)
-- **Pushup analyzers archived** (didn't work as intended)
-- **No real-time connection** between iOS and Python backend
+These are the specific problems that led to the KevLines 2.0 rewrite:
 
-## 🏗️ Project Structure
+1. **Slow round-trip processing**: Full video uploaded to cloud, processed server-side, downloaded back. A 30-second video takes 2-5 minutes end-to-end on cellular.
+2. **Software-only video decode**: `cv2.VideoCapture` uses CPU-only decoding on the server. No hardware acceleration.
+3. **No GPU for pose estimation**: MediaPipe runs on server CPU without GPU delegate. Every frame is CPU-bound.
+4. **Codec fallback cascade**: Tries 5 codecs sequentially (`H264 → avc1 → mp4v → XVID → MJPG`) on every export because server environment codec support is unpredictable.
+5. **Double encoding**: After OpenCV writes the video, a second ffmpeg pass re-encodes for color space preservation. Two full decode/encode cycles per video.
+6. **Render cold starts**: The free-tier Render instance spins down after inactivity. First request can take 30-60 seconds just to wake the server before processing begins.
+7. **100MB upload limit**: Large or high-resolution videos must be trimmed or compressed before upload.
+8. **No real-time analysis**: Cannot process live camera feed because of network dependency.
+9. **No tempo tracking**: No phase detection for eccentric/pause/concentric timing.
+10. **Duplicated analyzer code**: `calculate_angle`, `extend_line_to_frame`, `smooth_landmark`, and video I/O boilerplate are copy-pasted across all 5 analyzer files.
+11. **No data persistence**: Workout history is stored in `@State` and lost when the app closes.
+
+## Project Structure
 
 ```
 KevLines/
-├── app.py                           # Flask web API (Python backend)
-├── hacksquat_analyzer.py           # Working hack squat analyzer
-├── row_analyzer.py                 # Working row analyzer  
-├── pose_analyzer.py                # Working lat pulldown analyzer
-├── archive/pushup_analyzers/       # Archived pushup analyzers
-├── KevLines/                       # iOS App
-│   ├── KevLinesApp.swift           # App entry point
-│   ├── ContentView.swift           # Main navigation
-│   ├── ExerciseView.swift          # Workout interface
-│   ├── PoseAnalyzer.swift          # Pose analysis logic (simulated)
-│   ├── CameraView.swift            # Camera interface
-│   ├── WorkoutHistoryView.swift    # Workout tracking
-│   └── SettingsView.swift          # App settings
-├── templates/                      # Web interface templates
-├── uploads/                        # Video upload storage
-├── outputs/                        # Processed video output
-├── requirements.txt                # Python dependencies
-└── IOS_DEPLOYMENT_GUIDE.md        # iOS deployment guide
+├── app.py                          # Flask backend (API server)
+├── pose_analyzer.py                # Lat pulldown analyzer
+├── row_analyzer.py                 # Row analyzer (with smoothing, rep counting)
+├── hacksquat_analyzer.py           # Hack squat analyzer
+├── backsquat_analyzer.py           # Back squat analyzer (with smoothing)
+├── hacksquat_analyzer_line.py      # Hack squat variant with extended lines
+├── pose_analyzer_0.5.py            # Older pose analyzer
+├── requirements.txt                # Python: flask, mediapipe, opencv, numpy, moviepy
+├── Procfile / render.yaml          # Render deployment config
+├── Dockerfile                      # Docker config
+├── KevLines/                       # Xcode iOS app
+│   ├── KevLines/
+│   │   ├── KevLinesApp.swift       # App entry point
+│   │   ├── ContentView.swift       # Tab navigation
+│   │   ├── ExerciseView.swift      # Video selection, upload, analysis flow
+│   │   ├── APIService.swift        # HTTPS client for Render backend
+│   │   ├── PoseAnalyzer.swift      # Vision-based pose overlay (preview only)
+│   │   ├── CameraView.swift        # AVCaptureSession camera
+│   │   ├── WorkoutHistoryView.swift
+│   │   └── SettingsView.swift
+├── archive/pushup_analyzers/       # Archived pushup analyzers (didn't work)
+└── templates/                      # Web UI templates
 ```
 
-## 🚀 Quick Start
+## Running 1.x
 
-### Python Backend (Primary)
-1. **Install dependencies**: `pip install -r requirements.txt`
-2. **Run the Flask API**: `python app.py`
-3. **Access web interface**: `http://localhost:3000`
-4. **Test with working exercises**: Hack squat, row, lat pulldown
-
-### iOS App (Development)
-1. **Open Xcode** and load `KevLines.xcodeproj`
-2. **Select your development team** in project settings
-3. **Build and run** on iOS Simulator or device
-4. **Note**: Currently uses simulated analysis (backend integration in progress)
-
-## 🎯 Development Roadmap
-
-### Phase 1: Hybrid Architecture (Current Focus)
-- **Connect iOS app to Python backend** via REST API
-- **Implement video upload/download** pipeline
-- **Test full workflow** with working exercises
-- **Deploy Python backend** to cloud server
-
-### Phase 2: Scale to 100s of Exercises
-- **Add new exercise analyzers** to Python backend
-- **Implement exercise recognition** algorithms
-- **Build comprehensive exercise database**
-- **Optimize video processing** for mobile uploads
-
-### Phase 3: Machine Learning Integration
-- **Collect user feedback** and form ratings
-- **Train ML models** on exercise form data
-- **Implement personalized coaching** algorithms
-- **Add predictive analytics** for progress tracking
-
-### Phase 4: Advanced Features
-- **Real-time coaching** during workouts
-- **Social features** and community challenges
-- **Integration with fitness trackers**
-- **Professional trainer tools**
-
-## 🛠️ Technical Stack
-
-### Python Backend (Primary Analysis Engine)
-- **Python 3.8+** with Flask web framework
-- **MediaPipe** for advanced pose detection
-- **OpenCV** for video processing and analysis
-- **MoviePy** for video manipulation
-- **NumPy** for mathematical calculations
-- **REST API** for iOS app integration
-
-### iOS App (User Interface)
-- **Xcode 15.0+** with iOS 17.0+ deployment target
-- **SwiftUI** for modern, responsive UI
-- **AVFoundation** for video capture and playback
-- **Vision framework** for basic pose detection (future)
-- **URLSession** for backend communication
-
-### Future ML Stack
-- **PyTorch/TensorFlow** for model training
-- **MLflow** for model management
-- **PostgreSQL** for user data and feedback
-- **Cloud storage** for video datasets
-
-## 📱 Installation
-
-### Python Backend (Primary)
+### Python Backend
 ```bash
-# Clone the repository
-git clone https://github.com/yourusername/kevlines.git
-cd kevlines
-
-# Install dependencies
 pip install -r requirements.txt
-
-# Run the Flask API
 python app.py
-
-# Access web interface at http://localhost:3000
+# API at http://localhost:3000
 ```
 
-### iOS App (Development)
+### iOS App
 ```bash
-# Open in Xcode
 open KevLines/KevLines.xcodeproj
-
-# Follow IOS_DEPLOYMENT_GUIDE.md for setup
-# Note: Currently uses simulated analysis
+# Build and run in Xcode (requires Render backend running)
 ```
 
-## 🎯 Current Goals
+## What Changed in 2.0
 
-1. **Connect iOS app to Python backend** for real video analysis
-2. **Deploy Python backend to cloud server** for production use
-3. **Scale to support 100s of exercises** with centralized processing
-4. **Integrate machine learning** for personalized coaching
-5. **Build comprehensive fitness analysis platform**
+KevLines 2.0 is a ground-up rebuild as a **pure Swift iOS app** with **no server dependency**:
 
-## 🤝 Contributing
+- All video processing runs locally on-device using AVFoundation hardware acceleration
+- MediaPipe iOS SDK replaces the Python MediaPipe backend (same 33 landmarks)
+- Overlays rendered directly onto pixel buffers via Core Graphics
+- Single-pass hardware encode via AVAssetWriter (no codec hunting, no re-encoding)
+- Modular analyzer architecture with shared math utilities
+- Tempo tracking (eccentric/pause/concentric/pause phase detection)
+- ~10-30x faster processing than 1.x
 
-This project is in active development. The focus is on:
-- Connecting iOS app to Python backend
-- Adding new exercise analyzers
-- Improving analysis accuracy
-- Building ML capabilities
+See the [KevLines 2.0 repository](https://github.com/theroosterjones/KevLines2.0) for the new architecture.
 
-## 📄 License
+## License
 
-This project is licensed under the MIT License.
-
----
-
-**KevLines** - Building the future of AI-powered fitness analysis! 🏋️‍♂️ 
+MIT License
